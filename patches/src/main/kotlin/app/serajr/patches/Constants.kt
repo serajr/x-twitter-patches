@@ -12,15 +12,15 @@ object Constants {
         appIconColor = 0x000000, // Ícone preto do X.
         targets = listOf(
             AppTarget(
-                version = "12.33.0-alpha.02" // Experimental
+                version = "12.33.0-alpha.02", // Experimental
                 isExperimental = true
             ),  
             AppTarget(
-                version = "12.31.0-prod.01" // Experimental
+                version = "12.31.0-prod.01", // Experimental
                 isExperimental = true
             ),
             AppTarget(
-                version = "12.29.1-prod.01" // Recomendada
+                version = "12.29.1-prod.01", // Recomendada
                 isExperimental = false
             )
         )
