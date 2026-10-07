@@ -16,48 +16,46 @@ private const val BOOLEAN_VALUE_OF_DESCRIPTOR = "Ljava/lang/Boolean;->valueOf(Z)
 private const val COLLECTION_DESCRIPTOR = "Ljava/util/Collection;"
 
 @Suppress("unused")
-object DisableBlurPatch : app.morphe.patcher.patch.Patch<app.morphe.patcher.patch.BytecodePatchContext> by bytecodePatch(
+val disableBlurPatch = bytecodePatch(
     name = "Desativar Blur do X",
-    description = "Remove permanentemente os efeitos de desfoque (blur - do Jetpack Compose).",
-    default = false
+    description = "Remove permanentemente os efeitos de desfoque (blur) do Jetpack Compose no aplicativo do X.",
+    default = true
 ) {
-    init {
-        compatibleWith(Constants.COMPATIBILITY_X)
+    compatibleWith(Constants.COMPATIBILITY_X)
 
-        execute {
-            var targetMethod: Method? = null
+    execute {
+        var targetMethod: Method? = null
 
-            // Varre as classes do pacote Haze para encontrar o gravador de efeito do Compose (12.30+)
-            classDefForEach { classDef ->
-                if (!classDef.type.toString().startsWith(HAZE_SCOPE)) return@classDefForEach
-                
-                val found = classDef.methods.firstOrNull { method -> 
-                    method.implementation != null && isHazeBlurEnabledRecorder(method) 
-                }
-                
-                if (found != null) {
-                    targetMethod = found
-                    return@classDefForEach
-                }
+        // Varre as classes do pacote Haze para encontrar o gravador de efeito do Compose (12.30+)
+        classDefForEach { classDef ->
+            if (!classDef.type.toString().startsWith(HAZE_SCOPE)) return@classDefForEach
+            
+            val found = classDef.methods.firstOrNull { method -> 
+                method.implementation != null && isHazeBlurEnabledRecorder(method) 
             }
+            
+            if (found != null) {
+                targetMethod = found
+                return@classDefForEach
+            }
+        }
 
-            // Se encontrar o método, injeta o comando usando a extensão oficial InstructionExtensions
-            targetMethod?.let { method ->
-                val mutableClass = mutableClassDefBy(method.definingClass)
-                val mutableMethod = mutableClass.methods.firstOrNull { it.toString() == method.toString() }
+        // Se encontrar o método, injeta o comando usando a extensão oficial InstructionExtensions
+        targetMethod?.let { method ->
+            val mutableClass = mutableClassDefBy(method.definingClass)
+            val mutableMethod = mutableClass.methods.firstOrNull { it.toString() == method.toString() }
+            
+            if (mutableMethod != null) {
+                // v1 corresponde ao registrador p1 em métodos virtuais (primeiro parâmetro booleano)
+                val inputRegister = 1
                 
-                if (mutableMethod != null) {
-                    // v1 corresponde ao registrador p1 em métodos virtuais (primeiro parâmetro booleano)
-                    val inputRegister = 1
-                    
-                    // A extensão addInstructions do Morphe estende diretamente o objeto do método mutável
-                    mutableMethod.addInstructions(
-                        0,
-                        """
-                            const/4 v$inputRegister, 0x0
-                        """
-                    )
-                }
+                // A extensão addInstructions do Morphe estende diretamente o objeto do método mutável
+                mutableMethod.addInstructions(
+                    0,
+                    """
+                        const/4 v$inputRegister, 0x0
+                    """
+                )
             }
         }
     }
