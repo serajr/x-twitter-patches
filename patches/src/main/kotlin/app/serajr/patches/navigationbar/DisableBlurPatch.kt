@@ -66,7 +66,7 @@ val disableBlurPatch = bytecodePatch(
                 println("Morphe Patcher -> Codigo injetado com sucesso no indice 0!")
             }
         } ?: run {
-            println("Morphe Patcher -> Erro: O metodo alvo nao foi localizado no pacote Haze.")
+            println("Morphe Patcher -> Erro: O metodo alvo nao foi localizado no pacote Haze do X.")
         }
     }
 }
