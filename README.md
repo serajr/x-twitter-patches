@@ -1,10 +1,4 @@
-# 👋🧩 Morphe Patches template
-
-Template repository for Morphe Patches.
-
-## ❓ About
-
-Patches for X (Twitter) app.
+# Patches for X (Twitter) app.
 
 ### How to use these patches
 
