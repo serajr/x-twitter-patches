@@ -1,4 +1,4 @@
-group = "app.serajr.x.twitter"
+group = "app.serajr.patches"
 
 patches {
     about {
