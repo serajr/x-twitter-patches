@@ -1,3 +1,7 @@
+## [1.1.0](https://github.com/serajr/x-twitter-patches/compare/v1.0.0...v1.1.0) (2026-10-07)
+
+## [1.1.0-dev.1](https://github.com/serajr/x-twitter-patches/compare/v1.0.0...v1.1.0-dev.1) (2026-10-07)
+
 ## 1.0.0 (2026-10-07)
 
 ### ✨ New Features
