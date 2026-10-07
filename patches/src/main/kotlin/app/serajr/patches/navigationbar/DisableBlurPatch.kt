@@ -42,6 +42,13 @@ val disableBlurPatch = bytecodePatch(
 
         // Se encontrar o método, injeta o comando usando a extensão oficial InstructionExtensions
         targetMethod?.let { method ->
+            // --- LINHAS DE LOG CORRIGIDAS COM PRINTLN ---
+            println("Morphe Patcher -> Alvo encontrado com sucesso!")
+            println("Classe Ofuscada: ${method.definingClass}")
+            println("Metodo Ofuscado: ${method.name}")
+            println("Assinatura Completa: $method")
+            // --------------------------------------------
+
             val mutableClass = mutableClassDefBy(method.definingClass)
             val mutableMethod = mutableClass.methods.firstOrNull { it.toString() == method.toString() }
             
@@ -56,7 +63,10 @@ val disableBlurPatch = bytecodePatch(
                         const/4 v$inputRegister, 0x0
                     """
                 )
+                println("Morphe Patcher -> Codigo injetado com sucesso no indice 0!")
             }
+        } ?: run {
+            println("Morphe Patcher -> Erro: O metodo alvo nao foi localizado no pacote Haze.")
         }
     }
 }
