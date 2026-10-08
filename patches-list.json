@@ -1,10 +1,10 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.10.0",
+  "version": "1.11.0-dev.1",
   "patches": [
     {
-      "name": "Corrige o contraste da Barra de Navegação",
-      "description": "Corrige o bug de transparência total forçando o contraste nativo!",
+      "name": "Desativar Blur do X",
+      "description": "Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+.",
       "default": true,
       "category": null,
       "dependencies": [],
@@ -44,9 +44,9 @@
       "options": []
     },
     {
-      "name": "Desativar Blur do X",
-      "description": "Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+.",
-      "default": true,
+      "name": "Fix Navigation Bar Scrim",
+      "description": "Testa a preservação da configuração original de contraste da navigation bar sem alterar o edge-to-edge.",
+      "default": false,
       "category": null,
       "dependencies": [],
       "compatiblePackages": [
