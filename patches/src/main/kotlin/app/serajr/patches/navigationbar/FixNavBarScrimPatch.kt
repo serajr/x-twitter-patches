@@ -21,16 +21,21 @@ val forceXNavigationBarScrimPatch = bytecodePatch(
 
         // 1. VARREDURA GLOBAL ANTI-OFUSCAÇÃO: Procura a classe e o método pela sua estrutura
         classDefForEach { classDef ->
-            // Ignora classes nativas do AndroidX e bibliotecas conhecidas para acelerar o build
             val className = classDef.type.toString()
-            if (className.startsWith("Landroid") || className.startsWith("Lkotlin")) {
+            // Ignora classes nativas do AndroidX e bibliotecas conhecidas para acelerar o build
+            if (className.startsWith("Landroid") || className.startsWith("Lkotlin") || className.startsWith("Landroidx")) {
                 return@classDefForEach
             }
 
             for (method in classDef.methods) {
-                // O método original do X recebe 1 parâmetro (Window) e retorna Void (V)
-                if (method.returnType != "V" || method.parameterTypes.size != 1 || 
-                    method.parameterTypes[0].toString() != "Landroid/view/Window;") {
+                // O método original do X recebe exatamente 1 parâmetro (Window) e retorna Void (V)
+                if (method.returnType != "V" || method.parameterTypes.size != 1) {
+                    continue
+                }
+
+                // Valida se o primeiro parâmetro é a Window do Android
+                val firstParam = method.parameterTypes[0].toString()
+                if (firstParam != "Landroid/view/Window;") {
                     continue
                 }
 
@@ -50,10 +55,17 @@ val forceXNavigationBarScrimPatch = bytecodePatch(
                         reference.parameterTypes[0].toString() == "Z" &&
                         reference.returnType == "V"
                     ) {
-                        // Encontramos o método oculto da porta de UI do X, independente do nome ofuscado!
-                        foundMethod = method
-                        targetIndex = index
-                        return@classDefForEach
+                        // Certifica-se de que encontramos a função "a" (que passa false/0), evitando a função "b"
+                        // Procuramos se há uma instrução const/4 com valor 0 nas proximidades anteriores
+                        val hasFalseConst = instructions.subList(0, index).any { 
+                            it.opcode == Opcode.CONST_4 && it.toString().contains("0") 
+                        }
+                        
+                        if (hasFalseConst) {
+                            foundMethod = method
+                            targetIndex = index
+                            return@classDefForEach
+                        }
                     }
                 }
             }
@@ -73,12 +85,9 @@ val forceXNavigationBarScrimPatch = bytecodePatch(
         } ?: throw IllegalStateException("Morphe Patcher -> Falha ao obter o método mutável.")
 
         /*
-         * No Smali ofuscado de métodos estáticos/utilitários com 1 parâmetro (Window),
-         * o parâmetro Window fica no registrador p0, e o valor booleano falso calculado fica em v0 ou v1.
-         * 
-         * No entanto, como o X chama 'window.setNavigationBarContrastEnforced(false)', o registrador
-         * de argumentos da chamada invoke-virtual sempre passará o booleano como o último parâmetro do par.
-         * Forçamos p1 (ou v1, dependendo do alinhamento) para 1 (true) para interceptar o valor injetado.
+         * No Smali ofuscado da classe utilitária do X "w.a(Window)", a Window entra como p0.
+         * O parâmetro boolean para o método setNavigationBarContrastEnforced é injetado via p1.
+         * Forçamos p1 para 1 (true) logo antes do invoke-virtual.
          */
         mutableMethod.addInstructions(
             targetIndex,
