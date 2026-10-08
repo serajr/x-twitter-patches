@@ -1,0 +1,21 @@
+package app.serajr.hooks.navigationbar;
+
+import android.app.Activity;
+import android.os.Build;
+import android.view.Window;
+
+public class FixNavBarScrimHook {
+  
+    public static void fixNavBarScrim(Activity activity) {
+        if (activity == null || activity.isFinishing()) return;
+
+        // Corrige o comportamento direto na janela raiz para afetar o app inteiro
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            Window window = activity.getWindow();
+            
+            // Força o Android a obedecer a regra de contraste/scrim nativa
+            // Revertendo o "false" que o X aplica por padrão nas telas internas
+            window.setNavigationBarContrastEnforced(true);
+        }
+    }
+}
