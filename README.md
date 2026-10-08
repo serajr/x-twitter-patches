@@ -21,7 +21,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 |----------|----------------|-----------|
 | [Desativar Blur do X](#desativar-blur-do-x) | Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+. |  |
 | [Preservar contraste da Barra de Navegação](#preservar-contraste-da-barra-de-navega-o) | Mantém permanentemente a proteção visual da barra de navegação sem alterar o edge-to-edge. |  |
-| [Preservar o contraste da Barra de Navegação](#preservar-o-contraste-da-barra-de-navega-o) | Corrige o bug de transparência total da Barra de Navegação em todo app. |  |
+| [Preservar o contraste da Barra de Navegação](#preservar-o-contraste-da-barra-de-navega-o) | Corrige o bug de transparência total da Barra de Navegação. |  |
 
 </details>
 
