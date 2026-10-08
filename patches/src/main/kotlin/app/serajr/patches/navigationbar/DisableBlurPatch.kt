@@ -2,19 +2,23 @@ package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
+import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
-import app.serajr.patches.Constants
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val HAZE_SCOPE = "Ldev/chrisbanes/haze/"
 private const val BOOLEAN_DESCRIPTOR = "Z"
 private const val VOID_DESCRIPTOR = "V"
+
 private const val BOOLEAN_VALUE_OF =
     "Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;"
-private const val COLLECTION_CLASS = "Ljava/util/Collection;"
+
+private const val COLLECTION_CLASS =
+    "Ljava/util/Collection;"
 
 private fun Method.isHazeBlurRecorder(): Boolean {
     if (AccessFlags.STATIC.isSet(accessFlags)) return false
@@ -33,41 +37,46 @@ private fun Method.isHazeBlurRecorder(): Boolean {
     val instructions = implementation.instructions.toList()
 
     /*
-     * Para um método de instância com apenas um parâmetro boolean:
+     * Em um método de instância com um único parâmetro:
      *
      * p0 = this
      * p1 = boolean
      *
-     * O boolean precisa ser utilizado pelo Boolean.valueOf(Z).
+     * Os parâmetros ocupam os últimos registradores do método.
      */
-    val registerCount = implementation.registerCount
+    val inputRegister = implementation.registerCount - 1
 
-    if (registerCount < 2) return false
-
-    val inputRegister = registerCount - 1
+    if (inputRegister < 1) return false
 
     var booleanValueOfFound = false
     var collectionAddFound = false
 
     for (instruction in instructions) {
+
         if (instruction.opcode == Opcode.INVOKE_STATIC) {
             val reference =
                 (instruction as? ReferenceInstruction)?.reference
+                    as? MethodReference
 
             if (reference?.toString() == BOOLEAN_VALUE_OF) {
-                val invoke = instruction as? Instruction35c ?: return false
+                val invoke =
+                    instruction as? Instruction35c
+                        ?: continue
 
-                if (invoke.registerC != inputRegister) {
-                    return false
+                /*
+                 * Boolean.valueOf(Z) recebe o parâmetro boolean
+                 * no primeiro registrador da chamada.
+                 */
+                if (invoke.registerC == inputRegister) {
+                    booleanValueOfFound = true
                 }
-
-                booleanValueOfFound = true
             }
         }
 
         if (instruction.opcode == Opcode.INVOKE_INTERFACE) {
             val reference =
                 (instruction as? ReferenceInstruction)?.reference
+                    as? MethodReference
 
             if (
                 reference != null &&
@@ -95,9 +104,6 @@ val disableBlurPatch = bytecodePatch(
 
         classDefForEach { classDef ->
 
-            /*
-             * Limita a busca ao pacote Haze.
-             */
             if (!classDef.type.toString().startsWith(HAZE_SCOPE)) {
                 return@classDefForEach
             }
@@ -115,8 +121,8 @@ val disableBlurPatch = bytecodePatch(
             )
 
             /*
-             * Diagnóstico útil para descobrir se a estrutura da versão
-             * instalada mudou.
+             * Diagnóstico:
+             * mostra os métodos void existentes dentro do pacote Haze.
              */
             classDefForEach { classDef ->
                 if (classDef.type.toString().startsWith(HAZE_SCOPE)) {
@@ -138,8 +144,8 @@ val disableBlurPatch = bytecodePatch(
 
         if (candidates.size != 1) {
             println(
-                "Morphe Patcher -> Foram encontrados ${candidates.size} " +
-                    "possíveis Haze blur recorders:"
+                "Morphe Patcher -> Foram encontrados " +
+                    "${candidates.size} possíveis Haze blur recorders:"
             )
 
             candidates.forEach {
@@ -157,9 +163,11 @@ val disableBlurPatch = bytecodePatch(
         println(
             "Morphe Patcher -> Haze blur recorder encontrado!"
         )
+
         println(
             "Classe: ${targetMethod.definingClass}"
         )
+
         println(
             "Método: $targetMethod"
         )
@@ -178,25 +186,21 @@ val disableBlurPatch = bytecodePatch(
             )
         }
 
-        val registerCount =
-            mutableMethod.implementation?.registerCount
+        val implementation =
+            mutableMethod.implementation
                 ?: throw IllegalStateException(
                     "Haze blur recorder não possui implementação."
                 )
 
         /*
-         * Método de instância:
+         * Em um método de instância com um parâmetro:
          *
-         * p0 = this
-         * p1 = boolean
-         *
-         * Com registerCount N:
-         * p0 = v(N - 2)
-         * p1 = v(N - 1)
+         * v(registerCount - 2) = p0 / this
+         * v(registerCount - 1) = p1 / boolean
          */
-        val inputRegister = registerCount - 1
+        val inputRegister = implementation.registerCount - 1
 
-        if (inputRegister < 0) {
+        if (inputRegister < 1) {
             throw IllegalStateException(
                 "Registro inválido para o parâmetro boolean: v$inputRegister"
             )
@@ -207,15 +211,15 @@ val disableBlurPatch = bytecodePatch(
         )
 
         /*
-         * Substitui o parâmetro recebido por false.
+         * Força o parâmetro boolean para false.
          *
-         * Qualquer:
+         * Original:
          *
-         *     blurEnabled = true
+         *     p1 = true
          *
-         * que chegar ao recorder passa a ser:
+         * passa a ser:
          *
-         *     blurEnabled = false
+         *     p1 = false
          */
         mutableMethod.addInstructions(
             0,
