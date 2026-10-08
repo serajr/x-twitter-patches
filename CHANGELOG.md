@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/serajr/x-twitter-patches/compare/v1.5.0...v1.6.0) (2026-10-08)
+
+### ✨ New Features
+
+* **navigation:** forcar reescrita do metodo de scrim do X ([57febb1](https://github.com/serajr/x-twitter-patches/commit/57febb1a810391bd278f32197398a63995e00107))
+
 ## [1.6.0-dev.1](https://github.com/serajr/x-twitter-patches/compare/v1.5.0...v1.6.0-dev.1) (2026-10-08)
 
 ### ✨ New Features
