@@ -9,7 +9,7 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 @Suppress("unused")
 val forceXNavigationBarScrimPatch = bytecodePatch(
-    name = "Preservar o contraste da Barra de Navegação",
+    name = "Corrige o contraste da Barra de Navegação",
     description = "Corrige o bug de transparência total da Barra de Navegação.",
     default = true
 ) {
@@ -19,53 +19,41 @@ val forceXNavigationBarScrimPatch = bytecodePatch(
         var foundMethod: com.android.tools.smali.dexlib2.iface.Method? = null
         var targetIndex: Int = -1
 
-        // 1. VARREDURA GLOBAL ANTI-OFUSCAÇÃO: Procura a classe e o método pela sua estrutura
+        // 1. FINGERPRINT: Localiza o onCreate da Activity Principal do X
         classDefForEach { classDef ->
             val className = classDef.type.toString()
-            // Ignora classes nativas do AndroidX e bibliotecas conhecidas para acelerar o build
             if (className.startsWith("Landroid") || className.startsWith("Lkotlin") || className.startsWith("Landroidx")) {
                 return@classDefForEach
             }
 
             for (method in classDef.methods) {
-                // O método original do X recebe exatamente 1 parâmetro (Window) e retorna Void (V)
-                if (method.returnType != "V" || method.parameterTypes.size != 1) {
+                if (method.name != "onCreate" || method.returnType != "V" || method.parameterTypes.size != 1) {
                     continue
                 }
 
-                // Valida se o primeiro parâmetro é a Window do Android
-                val firstParam = method.parameterTypes[0].toString()
-                if (firstParam != "Landroid/view/Window;") {
+                if (method.parameterTypes.toString() != "Landroid/os/Bundle;") {
                     continue
                 }
 
                 val instructions = method.implementation?.instructions?.toList() ?: continue
 
-                // Escaneia o corpo do método procurando a assinatura da Window do sistema
-                instructions.forEachIndexed { index, instruction ->
-                    if (instruction.opcode != Opcode.INVOKE_VIRTUAL) return@forEachIndexed
+                val isMainActivityOnCreate = instructions.any { instruction ->
+                    if (instruction.opcode != Opcode.INVOKE_SUPER) return@any false
+                    val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return@any false
+                    reference.name == "onCreate" && reference.parameterTypes.size == 1 && reference.parameterTypes.toString() == "Landroid/os/Bundle;"
+                }
 
-                    val reference = (instruction as? ReferenceInstruction)?.reference 
-                        as? MethodReference ?: return@forEachIndexed
+                if (isMainActivityOnCreate) {
+                    val callsWindow = instructions.any { instruction ->
+                        if (instruction.opcode != Opcode.INVOKE_VIRTUAL) return@any false
+                        val ref = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return@any false
+                        ref.name == "getWindow"
+                    }
 
-                    if (
-                        reference.definingClass.toString() == "Landroid/view/Window;" &&
-                        reference.name == "setNavigationBarContrastEnforced" &&
-                        reference.parameterTypes.size == 1 &&
-                        reference.parameterTypes[0].toString() == "Z" &&
-                        reference.returnType == "V"
-                    ) {
-                        // Certifica-se de que encontramos a função "a" (que passa false/0), evitando a função "b"
-                        // Procuramos se há uma instrução const/4 com valor 0 nas proximidades anteriores
-                        val hasFalseConst = instructions.subList(0, index).any { 
-                            it.opcode == Opcode.CONST_4 && it.toString().contains("0") 
-                        }
-                        
-                        if (hasFalseConst) {
-                            foundMethod = method
-                            targetIndex = index
-                            return@classDefForEach
-                        }
+                    if (callsWindow) {
+                        foundMethod = method
+                        targetIndex = 0 
+                        return@classDefForEach
                     }
                 }
             }
@@ -73,29 +61,37 @@ val forceXNavigationBarScrimPatch = bytecodePatch(
 
         val method = foundMethod
             ?: throw IllegalStateException(
-                "Morphe Patcher -> Não foi possível localizar o método utilitário ofuscado da Navigation Bar."
+                "Morphe Patcher -> Não foi possível localizar a Activity raiz do X para injetar a correção."
             )
 
-        println("Morphe Patcher -> Fingerprint estrutural localizou o método oculto com sucesso: ${method.definingClass} -> ${method.name}")
+        println("Morphe Patcher -> Activity raiz localizada com sucesso para injeção direta: ${method.definingClass}")
 
-        // 2. MODIFICAÇÃO DO BYTECODE
+        // 2. MODIFICAÇÃO DO BYTECODE VIA SMALI INLINE (Ignora o compileJava)
         val mutableClass = mutableClassDefBy(method.definingClass)
         val mutableMethod = mutableClass.methods.firstOrNull {
             it.name == method.name && it.returnType == method.returnType && it.parameterTypes == method.parameterTypes
-        } ?: throw IllegalStateException("Morphe Patcher -> Falha ao obter o método mutável.")
+        } ?: throw IllegalStateException("Morphe Patcher -> Falha ao obter o método mutável da Activity.")
 
         /*
-         * No Smali ofuscado da classe utilitária do X "w.a(Window)", a Window entra como p0.
-         * O parâmetro boolean para o método setNavigationBarContrastEnforced é injetado via p1.
-         * Forçamos p1 para 1 (true) logo antes do invoke-virtual.
+         * Buscamos o objeto Window associado à Activity em execução (p0)
+         * E forçamos a flag setNavigationBarContrastEnforced(true) direto no encadeamento do onCreate.
+         * Como o método onCreate de uma Activity usa p0 como o ponteiro 'this', fazemos a extração limpa:
+         * 
+         * invoke-virtual {p0}, Landroid/app/Activity;->getWindow()Landroid/view/Window;
+         * move-result-object v0
+         * const/4 v1, 0x1
+         * invoke-virtual {v0, v1}, Landroid/view/Window;->setNavigationBarContrastEnforced(Z)V
          */
         mutableMethod.addInstructions(
             targetIndex,
             """
-                const/4 p1, 0x1
+                invoke-virtual {p0}, Landroid/app/Activity;->getWindow()Landroid/view/Window;
+                move-result-object v0
+                const/4 v1, 0x1
+                invoke-virtual {v0, v1}, Landroid/view/Window;->setNavigationBarContrastEnforced(Z)V
             """
         )
 
-        println("Morphe Patcher -> Bug do contraste corrigido com sucesso de forma dinâmica!")
+        println("Morphe Patcher -> Injeção de contraste estático aplicada direto no ciclo de vida com sucesso!")
     }
 }
