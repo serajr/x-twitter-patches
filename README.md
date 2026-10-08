@@ -7,9 +7,9 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.5.0](https://github.com/serajr/x-twitter-patches/releases/tag/v1.5.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;2 patches total
+> **[v1.6.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.6.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;3 patches total
 <details open>
-<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;2 patches</summary>
+<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;3 patches</summary>
 <br>
 
 **🎯 Supported versions:**
@@ -21,6 +21,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 |----------|----------------|-----------|
 | [Desativar Blur do X](#desativar-blur-do-x) | Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+. |  |
 | [Preservar contraste da Barra de Navegação](#preservar-contraste-da-barra-de-navega-o) | Mantém permanentemente a proteção visual da barra de navegação sem alterar o edge-to-edge. |  |
+| [Preservar o contraste da Barra de Navegação](#preservar-o-contraste-da-barra-de-navega-o) | Corrige o bug de transparência total da Barra de Navegação em todo app. |  |
 
 </details>
 
