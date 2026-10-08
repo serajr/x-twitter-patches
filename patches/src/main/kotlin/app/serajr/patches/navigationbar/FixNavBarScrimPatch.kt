@@ -9,8 +9,8 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 @Suppress("unused")
 val forceXNavigationBarScrimPatch = bytecodePatch(
-    name = "Preservar contraste da Barra de Navegação no X",
-    description = "Corrige o bug de transparência total em qualquer versão do X através de varredura estrutural de Opcodes.",
+    name = "Preservar o contraste da Barra de Navegação",
+    description = "Corrige o bug de transparência total da Barra de Navegação em todo app.",
     default = true
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
