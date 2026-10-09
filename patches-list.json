@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.13.0",
+  "version": "1.14.0-dev.2",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -45,7 +45,7 @@
     },
     {
       "name": "Fix Navigation Bar Scrim",
-      "description": "Teste experimental de uma segunda chamada ao Haze.",
+      "description": "Teste experimental de uma segunda chamada ao  Haze.",
       "default": false,
       "category": null,
       "dependencies": [],
