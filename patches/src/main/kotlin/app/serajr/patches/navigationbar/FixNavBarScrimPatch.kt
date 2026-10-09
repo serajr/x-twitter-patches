@@ -15,7 +15,7 @@ private const val TARGET_CLASS = "Lcom/x/home/tabbed/x;"
 @Suppress("unused")
 val fixNavBarScrimPatch = bytecodePatch(
     name = "Fix Navigation Bar Scrim",
-    description = "Teste experimental de uma segunda chamada ao Haze.",
+    description = "Teste experimental de uma segunda chamada ao  Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
