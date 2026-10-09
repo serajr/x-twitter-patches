@@ -12,7 +12,7 @@ private const val TARGET_CLASS = "Lcom/x/ui/common/tabs/a;"
 @Suppress("unused")
 val fixNavBarScrimPatch = bytecodePatch(
     name = "Fix Navigation Bar Scrim",
-    description = "Teste 3: permitir Modifier personalizado no Haze.",
+    description = "Teste 4: permitir Modifier personalizado no Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -60,7 +60,7 @@ val fixNavBarScrimPatch = bytecodePatch(
             index + 1,
             """
             if-eqz p2, :modifier_ready
-            move-object v0, p2
+            move-object/from16 v0, p2
             :modifier_ready
             """.trimIndent()
         )
