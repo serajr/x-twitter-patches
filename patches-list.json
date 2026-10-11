@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.17.0",
+  "version": "1.18.0-dev.1",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -44,9 +44,9 @@
       "options": []
     },
     {
-      "name": "Fix Navigation Bar Scrim",
-      "description": "Teste 5: pintar a barra de navegação de vermelho.",
-      "default": false,
+      "name": "Manter Barra Inferior Visível",
+      "description": "Mantém a barra inferior do X visível durante a rolagem da timeline.",
+      "default": true,
       "category": null,
       "dependencies": [],
       "compatiblePackages": [
