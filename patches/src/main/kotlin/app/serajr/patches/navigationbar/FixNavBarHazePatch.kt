@@ -87,7 +87,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 )
 
         // Locate the outer Compose Modifier application.
-        val matches = instructions.withIndex().filter { (_, instruction ->
+        val matches = instructions.withIndex().filter { (_, instruction) ->
             if (instruction.opcode != Opcode.INVOKE_STATIC) {
                 return@filter false
             }
