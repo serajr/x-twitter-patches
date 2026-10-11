@@ -7,9 +7,9 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.19.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.19.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;4 patches total
+> **[v1.19.0-dev.2](https://github.com/serajr/x-twitter-patches/releases/tag/v1.19.0-dev.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;5 patches total
 <details open>
-<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;4 patches</summary>
+<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;5 patches</summary>
 <br>
 
 **🎯 Supported versions:**
@@ -20,6 +20,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
 | [Desativar Blur do X](#desativar-blur-do-x) | Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+. |  |
+| [Fix Navigation Bar Haze](#fix-navigation-bar-haze) | Experimentally applies the existing Haze effect to the bottom navigation container. |  |
 | [Keep Bottom Bar Visible](#keep-bottom-bar-visible) | Keeps the bottom navigation bar visible while scrolling the timeline. |  |
 | [Manter Barra Inferior Visível](#manter-barra-inferior-vis-vel) | Mantém a barra inferior do X visível durante a rolagem da timeline. |  |
 | [Preservar contraste da Barra de Navegação](#preservar-contraste-da-barra-de-navega-o) | Mantém permanentemente a proteção visual da barra de navegação sem alterar o edge-to-edge. |  |
