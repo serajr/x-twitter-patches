@@ -25,8 +25,7 @@ private fun debugNavHaze(message: String) {
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
     description =
-        "Diagnoses the bottom navigation container " +
-        "using a solid red background.",
+        "Diagnoses the bottom navigation container using a solid red background.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
