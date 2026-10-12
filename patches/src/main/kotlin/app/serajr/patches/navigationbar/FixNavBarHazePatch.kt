@@ -12,10 +12,8 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val DEBUG = false
 
-private const val TARGET_CLASS = "Lcom/x/ui/common/h2;"
-
-private const val HAZE_STATE =
-    "Ldev/chrisbanes/haze/w0;"
+private const val TARGET_CLASS =
+    "Lcom/x/ui/common/h2;"
 
 private fun debugNavHaze(message: String) {
     if (DEBUG) {
@@ -27,8 +25,8 @@ private fun debugNavHaze(message: String) {
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
     description =
-        "Experimentally applies the existing Haze effect " +
-        "to the bottom navigation container.",
+        "Diagnoses the bottom navigation container " +
+        "using a solid red background.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -44,24 +42,19 @@ val fixNavigationBarHazePatch = bytecodePatch(
             targetMethod = classDef.methods.firstOrNull { method ->
                 method.name == "a" &&
                     method.returnType == "V" &&
-                    method.parameterTypes.size == 10 &&
-                    method.parameterTypes[0].toString() ==
-                        "Landroidx/compose/runtime/internal/f;" &&
-                    method.parameterTypes[1].toString() ==
-                        HAZE_STATE &&
-                    method.parameterTypes[2].toString() ==
-                        "Lkotlin/jvm/functions/Function1;" &&
-                    method.parameterTypes[3].toString() ==
-                        "Landroidx/compose/ui/Modifier;" &&
-                    method.parameterTypes[4].toString() ==
-                        "Landroidx/compose/runtime/internal/f;" &&
-                    method.parameterTypes[5].toString() == "Z" &&
-                    method.parameterTypes[6].toString() == "Z" &&
-                    method.parameterTypes[7].toString() ==
-                        "Landroidx/compose/runtime/internal/f;" &&
-                    method.parameterTypes[8].toString() ==
-                        "Landroidx/compose/runtime/Composer;" &&
-                    method.parameterTypes[9].toString() == "I"
+                    method.parameterTypes.map { it.toString() } ==
+                    listOf(
+                        "Landroidx/compose/runtime/internal/f;",
+                        "Ldev/chrisbanes/haze/w0;",
+                        "Lkotlin/jvm/functions/Function1;",
+                        "Landroidx/compose/ui/Modifier;",
+                        "Landroidx/compose/runtime/internal/f;",
+                        "Z",
+                        "Z",
+                        "Landroidx/compose/runtime/internal/f;",
+                        "Landroidx/compose/runtime/Composer;",
+                        "I"
+                    )
             }
         }
 
@@ -80,14 +73,22 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 "FixNavigationBarHaze: mutable method not found."
             )
 
-        val instructions =
-            mutableMethod.implementation?.instructions?.toList()
+        val implementation =
+            mutableMethod.implementation
                 ?: error(
-                    "FixNavigationBarHaze: no method implementation."
+                    "FixNavigationBarHaze: no implementation."
                 )
 
-        // Locate the outer Compose Modifier application.
-        val matches = instructions.withIndex().filter { (_, instruction) ->
+        require(implementation.registerCount == 33) {
+            "FixNavigationBarHaze: unexpected register layout."
+        }
+
+        val instructions =
+            implementation.instructions.toList()
+
+        val matches = instructions.withIndex().filter {
+            (_, instruction) ->
+
             if (instruction.opcode != Opcode.INVOKE_STATIC) {
                 return@filter false
             }
@@ -97,15 +98,20 @@ val fixNavigationBarHazePatch = bytecodePatch(
                     as? MethodReference
                     ?: return@filter false
 
-            val invoke = instruction as? Instruction35c
-                ?: return@filter false
+            val invoke =
+                instruction as? Instruction35c
+                    ?: return@filter false
 
             reference.definingClass.toString() ==
                 "Landroidx/compose/ui/a;" &&
                 reference.name == "d" &&
                 reference.returnType ==
                     "Landroidx/compose/ui/Modifier;" &&
-                reference.parameterTypes.size == 2 &&
+                reference.parameterTypes.map { it.toString() } ==
+                    listOf(
+                        "Landroidx/compose/runtime/Composer;",
+                        "Landroidx/compose/ui/Modifier;"
+                    ) &&
                 invoke.registerCount == 2 &&
                 invoke.registerC == 11 &&
                 invoke.registerD == 15
@@ -118,35 +124,41 @@ val fixNavigationBarHazePatch = bytecodePatch(
 
         val index = matches.single().index
 
-        debugNavHaze("Target: $method")
+        debugNavHaze("Target method: $method")
         debugNavHaze("Insertion index: $index")
 
         /*
-         * X 12.31.0-prod.01 register layout:
+         * Diagnostic for X 12.31.0-prod.01.
          *
-         * v15 = outer Modifier
-         * v11 = Composer
-         * p1  = existing HazeState
+         * v15 = outer container Modifier
+         * v9/v10 = temporary Compose Color (Long)
+         * v4 = temporary Rectangle Shape
          *
-         * v4 and v9 can be used temporarily here.
+         * Opaque red: ARGB #FFFF0000
+         * Packed Compose Color:
+         * 0xFFFF000000000000L
          *
-         * No register count changes.
-         * No changes to AnimatedVisibility.
-         * No changes to the original e2 lambda.
+         * Apply Modifier.background() before the
+         * outer Modifier is passed to Compose.
+         *
+         * AnimatedVisibility remains unchanged.
          */
 
         mutableMethod.addInstructions(
             index,
             """
-            move-object/from16 v4, p1
-            const/4 v9, 0x6
+            const-wide v9, 0xffff000000000000L
 
-            invoke-static {v15, v4, v11, v9}, Lcom/x/compose/core/e0;->c(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/w0;Landroidx/compose/runtime/Composer;I)Landroidx/compose/ui/Modifier;
+            sget-object v4, Landroidx/compose/ui/graphics/o0;->b:Landroidx/compose/ui/graphics/d1;
+
+            invoke-static {v15, v9, v10, v4}, Landroidx/compose/foundation/p;->h(Landroidx/compose/ui/Modifier;JLandroidx/compose/ui/graphics/i1;)Landroidx/compose/ui/Modifier;
 
             move-result-object v15
             """.trimIndent()
         )
 
-        debugNavHaze("Outer container Haze injected.")
+        debugNavHaze(
+            "Diagnostic red background injected."
+        )
     }
 }
