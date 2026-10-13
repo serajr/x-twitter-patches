@@ -25,7 +25,7 @@ private fun debugNavHaze(message: String) {
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
     description =
-        "Diagnoses the bottom navigation container using a solid red background.",
+        "Diagnoses the bottom navigation container using a solid salmon background.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -123,41 +123,53 @@ val fixNavigationBarHazePatch = bytecodePatch(
 
         val index = matches.single().index
 
-        debugNavHaze("Target method: $method")
-        debugNavHaze("Insertion index: $index")
+        val resultIndex = index + 2
+
+        require(
+            instructions.getOrNull(index + 1)?.opcode ==
+                Opcode.MOVE_RESULT_OBJECT
+        ) {
+            "FixNavigationBarHaze: expected Modifier result."
+        }
 
         /*
          * Diagnostic for X 12.31.0-prod.01.
          *
-         * v15 = outer container Modifier
-         * v9/v10 = temporary Compose Color (Long)
-         * v4 = temporary Rectangle Shape
+         * Apply a visible salmon background to
+         * the outer bottom navigation container.
          *
-         * Opaque red: ARGB #FFFF0000
-         * Packed Compose Color:
-         * 0xFFFF000000000000L
+         * v1     = resulting Modifier
+         * v4/v5  = temporary Compose Color
+         * v21    = Rectangle Shape
+         * v22    = backup of the original v5 float
          *
-         * Apply Modifier.background() before the
-         * outer Modifier is passed to Compose.
+         * Preserve the original bottom bar animation.
          *
-         * AnimatedVisibility remains unchanged.
+         * Color: #FB9FA8 (opaque salmon)
+         * Source: com.x.compose.core.r1.T0
          */
 
         mutableMethod.addInstructions(
-            index,
+            resultIndex,
             """
-            const-wide v9, 0xffff000000000000L
+            move/from16 v22, v5
 
-            sget-object v4, Landroidx/compose/ui/graphics/o0;->b:Landroidx/compose/ui/graphics/d1;
+            sget-wide v4, Lcom/x/compose/core/r1;->T0:J
 
-            invoke-static {v15, v9, v10, v4}, Landroidx/compose/foundation/p;->h(Landroidx/compose/ui/Modifier;JLandroidx/compose/ui/graphics/i1;)Landroidx/compose/ui/Modifier;
+            sget-object v21, Landroidx/compose/ui/graphics/o0;->b:Landroidx/compose/ui/graphics/d1;
 
-            move-result-object v15
+            move-object/from16 v9, v21
+
+            invoke-static {v1, v4, v5, v9}, Landroidx/compose/foundation/p;->h(Landroidx/compose/ui/Modifier;JLandroidx/compose/ui/graphics/i1;)Landroidx/compose/ui/Modifier;
+
+            move-result-object v1
+
+            move/from16 v5, v22
             """.trimIndent()
         )
 
         debugNavHaze(
-            "Diagnostic red background injected."
+            "Diagnostic salmon background injected."
         )
     }
 }
