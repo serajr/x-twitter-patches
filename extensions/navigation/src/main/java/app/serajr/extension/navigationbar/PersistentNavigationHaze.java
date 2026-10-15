@@ -6,10 +6,19 @@ public final class PersistentNavigationHaze {
 
     private static final String TAG = "SerajrNavHaze";
 
+    private static Boolean lastVisibility = null;
+
     private PersistentNavigationHaze() {
     }
 
     public static void initialize() {
         Log.i(TAG, "PersistentNavigationHaze extension loaded successfully!");
+    }
+
+    public static void onVisibilityChanged(boolean visible) {
+        if (lastVisibility == null || lastVisibility.booleanValue() != visible) {
+            lastVisibility = visible;
+            Log.i(TAG, "bottomTabsVisible=" + visible);
+        }
     }
 }
