@@ -10,6 +10,6 @@ public final class PersistentNavigationHaze {
     }
 
     public static void initialize() {
-        Log.i(TAG, "PersistentNavigationHaze extension loaded successfully");
+        Log.i(TAG, "PersistentNavigationHaze extension loaded successfully!");
     }
 }
