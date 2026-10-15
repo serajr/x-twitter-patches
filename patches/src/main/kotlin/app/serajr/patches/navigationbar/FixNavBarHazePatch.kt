@@ -178,7 +178,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val sizeInstructions = sizeImplementation.instructions.toList()
         
         val returnIndex = sizeInstructions.indexOfLast {
-            it.opcode.name == "RETURN"
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN
         }
         
         require(returnIndex >= 0) {
