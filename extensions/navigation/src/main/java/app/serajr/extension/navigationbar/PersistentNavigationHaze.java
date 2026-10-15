@@ -22,4 +22,8 @@ public final class PersistentNavigationHaze {
     public static void onBottomBarVisibilityChanged(boolean visible) {
         Log.i(TAG, "Bottom bar visibility changed: " + visible);
     }
+
+    public static void onBottomBarContentComposed() {
+        Log.i(TAG, "Bottom bar content composed (e2.invoke)");
+    }
 }
