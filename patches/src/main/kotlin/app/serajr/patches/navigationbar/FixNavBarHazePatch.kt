@@ -106,6 +106,42 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "invoke-static {p1}, ${EXTENSION_CLASS}->onBottomBarVisibilityChanged(Z)V"
         )
 
+        // Hook 3: Diagnostic hook: check whether e2 content is invoked
+        // while the bottom tabs are being hidden.
+        var e2Method: Method? = null
+
+        classDefForEach { classDef ->
+            if (classDef.type.toString() == "Lcom/x/ui/common/e2;") {
+                e2Method = classDef.methods.firstOrNull { method ->
+                    method.name == "invoke" &&
+                        method.returnType == "Ljava/lang/Object;" &&
+                        method.parameterTypes.map { it.toString() } == listOf(
+                            "Ljava/lang/Object;",
+                            "Ljava/lang/Object;",
+                            "Ljava/lang/Object;"
+                        )
+                }
+            }
+        }
+
+        val contentMethod = e2Method
+            ?: error("FixNavigationBarHaze: e2.invoke() not found.")
+
+        val mutableE2Class = mutableClassDefBy(contentMethod.definingClass)
+
+        val mutableE2Method = mutableE2Class.methods.firstOrNull {
+            it.toString() == contentMethod.toString()
+        } ?: error("FixNavigationBarHaze: mutable e2.invoke() not found.")
+
+        require(mutableE2Method.implementation?.registerCount == 22) {
+            "FixNavigationBarHaze: unexpected e2.invoke() register layout."
+        }
+
+        mutableE2Method.addInstructions(
+            0,
+            "invoke-static {}, ${EXTENSION_CLASS}->onBottomBarContentComposed()V"
+        )
+        
         debugNavHaze("Hooks injected into h2.a() and g2.setVisible(Z).")
     }
 }
