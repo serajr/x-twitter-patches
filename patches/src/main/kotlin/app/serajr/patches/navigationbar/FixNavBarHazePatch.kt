@@ -3,33 +3,29 @@ package app.serajr.patches.navigationbar
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
-
+import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 
 private const val DEBUG = false
 
-private const val TARGET_CLASS =
-    "Lcom/x/ui/common/h2;"
+private const val TARGET_CLASS = "Lcom/x/ui/common/h2;"
 
-private const val EXTENSION_METHOD =
-    "Lapp/serajr/extension/navigationbar/PersistentNavigationHaze;->initialize()V"
+private const val EXTENSION_CLASS =
+    "Lapp/serajr/extension/navigationbar/PersistentNavigationHaze;"
 
 private fun debugNavHaze(message: String) {
-    if (DEBUG) {
-        println("FixNavigationBarHaze -> $message")
-    }
+    if (DEBUG) println("FixNavigationBarHaze -> $message")
 }
 
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description =
-        "Tests the persistent navigation Haze extension integration.",
+    description = "Monitors the effective bottom tabs visibility for persistent navigation Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
 
-    // Merge our compiled Java extension into the patched APK.
     extendWith("extensions/navigation.mpe")
 
     execute {
@@ -43,8 +39,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
             targetMethod = classDef.methods.firstOrNull { method ->
                 method.name == "a" &&
                     method.returnType == "V" &&
-                    method.parameterTypes.map { it.toString() } ==
-                    listOf(
+                    method.parameterTypes.map { it.toString() } == listOf(
                         "Landroidx/compose/runtime/internal/f;",
                         "Ldev/chrisbanes/haze/w0;",
                         "Lkotlin/jvm/functions/Function1;",
@@ -60,38 +55,55 @@ val fixNavigationBarHazePatch = bytecodePatch(
         }
 
         val method = targetMethod
-            ?: error(
-                "FixNavigationBarHaze: target method not found."
-            )
+            ?: error("FixNavigationBarHaze: target method not found.")
 
-        val mutableClass =
-            mutableClassDefBy(method.definingClass)
+        val mutableClass = mutableClassDefBy(method.definingClass)
 
-        val mutableMethod =
-            mutableClass.methods.firstOrNull {
-                it.toString() == method.toString()
-            } ?: error(
-                "FixNavigationBarHaze: mutable method not found."
-            )
+        val mutableMethod = mutableClass.methods.firstOrNull {
+            it.toString() == method.toString()
+        } ?: error("FixNavigationBarHaze: mutable method not found.")
 
-        val implementation =
-            mutableMethod.implementation
-                ?: error(
-                    "FixNavigationBarHaze: no implementation."
-                )
+        val implementation = mutableMethod.implementation
+            ?: error("FixNavigationBarHaze: no implementation.")
 
         require(implementation.registerCount == 33) {
             "FixNavigationBarHaze: unexpected register layout."
         }
 
-        // Diagnostic only. No registers are modified.
+        val instructions = implementation.instructions.toList()
+
+        // Effective visibility is held in v19 at the IF_EQZ
+        // instruction following the convergence of both paths.
+        val visibilityBranches = instructions.withIndex().filter { (_, instruction) ->
+            instruction.opcode == Opcode.IF_EQZ &&
+                (instruction as? OneRegisterInstruction)?.registerA == 19
+        }
+
+        require(visibilityBranches.size == 1) {
+            "FixNavigationBarHaze: expected exactly one IF_EQZ v19, " +
+                "found ${visibilityBranches.size}."
+        }
+
+        val visibilityIndex = visibilityBranches.single().index
+
+        // Keep the original extension initialization hook.
+        // Insert after finding the original instruction index,
+        // so the index is not shifted before visibility injection.
+        mutableMethod.addInstructions(
+            visibilityIndex,
+            """
+                invoke-static/range {v19 .. v19}, ${EXTENSION_CLASS}->onVisibilityChanged(Z)V
+            """.trimIndent()
+        )
+
         mutableMethod.addInstructions(
             0,
-            "invoke-static {}, $EXTENSION_METHOD"
+            "invoke-static {}, ${EXTENSION_CLASS}->initialize()V"
         )
 
         debugNavHaze(
-            "PersistentNavigationHaze.initialize() hook injected."
+            "Visibility hook injected before IF_EQZ v19 " +
+                "at original instruction index $visibilityIndex."
         )
     }
 }
