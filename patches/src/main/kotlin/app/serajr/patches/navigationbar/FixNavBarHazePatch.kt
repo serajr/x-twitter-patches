@@ -165,13 +165,17 @@ val fixNavigationBarHazePatch = bytecodePatch(
             it.toString() == originalSizeMethod.toString()
         } ?: error("FixNavigationBarHaze: mutable g2.getSize() not found.")
         
-        require(mutableSizeMethod.implementation?.registerCount == 2) {
-            "FixNavigationBarHaze: unexpected g2.getSize() register layout."
-        }
+        val sizeImplementation = mutableSizeMethod.implementation
+            ?: error("FixNavigationBarHaze: g2.getSize() has no implementation.")
         
-        // Insert immediately before the method's final return.
-        // At this point, p0 contains the computed integer size.
-        val sizeInstructions = mutableSizeMethod.implementation!!.instructions.toList()
+        debugNavHaze(
+            "g2.getSize() registerCount=${sizeImplementation.registerCount}"
+        )
+        
+        // The original method returns an integer.
+        // Inject immediately before its RETURN instruction,
+        // using the same register as the return value.
+        val sizeInstructions = sizeImplementation.instructions.toList()
         
         val returnIndex = sizeInstructions.indexOfLast {
             it.opcode.name == "RETURN"
@@ -181,11 +185,19 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "FixNavigationBarHaze: getSize() return not found."
         }
         
+        val returnInstruction = sizeInstructions[returnIndex]
+            as? com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+            ?: error("FixNavigationBarHaze: unexpected getSize() return instruction.")
+        
+        val resultRegister = returnInstruction.registerA
+        
         mutableSizeMethod.addInstructions(
             returnIndex,
-            "invoke-static {p0}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
+            """
+                invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
+            """.trimIndent()
         )
         
-        debugNavHaze("Hooks injected into h2.a() and g2.setVisible(Z).")
+        debugNavHaze("Hooks injected.")
     }
 }
