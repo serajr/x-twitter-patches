@@ -7,6 +7,7 @@ public final class PersistentNavigationHaze {
     private static final String TAG = "SerajrNavHaze";
 
     private static Boolean lastVisibility = null;
+    private static int lastBottomBarSize = Integer.MIN_VALUE;
 
     private PersistentNavigationHaze() {
     }
@@ -25,5 +26,12 @@ public final class PersistentNavigationHaze {
 
     public static void onBottomBarContentComposed() {
         Log.i(TAG, "Bottom bar content composed (e2.invoke)");
+    }
+
+    public static void onBottomBarSizeChanged(int size) {
+        if (lastBottomBarSize != size) {
+            lastBottomBarSize = size;
+            Log.i(TAG, "Bottom bar animated size: " + size);
+        }
     }
 }

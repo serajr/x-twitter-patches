@@ -142,6 +142,50 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "invoke-static {}, ${EXTENSION_CLASS}->onBottomBarContentComposed()V"
         )
         
+        // Hook 4
+        var sizeMethod: Method? = null
+
+        classDefForEach { classDef ->
+            if (classDef.type.toString() == VISIBILITY_CLASS) {
+                sizeMethod = classDef.methods.firstOrNull { method ->
+                    method.name == "getSize" &&
+                        method.returnType == "I" &&
+                        method.parameterTypes.isEmpty()
+                }
+            }
+        }
+        
+        val originalSizeMethod = sizeMethod
+            ?: error("FixNavigationBarHaze: g2.getSize() not found.")
+        
+        val mutableSizeClass =
+            mutableClassDefBy(originalSizeMethod.definingClass)
+        
+        val mutableSizeMethod = mutableSizeClass.methods.firstOrNull {
+            it.toString() == originalSizeMethod.toString()
+        } ?: error("FixNavigationBarHaze: mutable g2.getSize() not found.")
+        
+        require(mutableSizeMethod.implementation?.registerCount == 2) {
+            "FixNavigationBarHaze: unexpected g2.getSize() register layout."
+        }
+        
+        // Insert immediately before the method's final return.
+        // At this point, p0 contains the computed integer size.
+        val sizeInstructions = mutableSizeMethod.implementation!!.instructions.toList()
+        
+        val returnIndex = sizeInstructions.indexOfLast {
+            it.opcode.name == "RETURN"
+        }
+        
+        require(returnIndex >= 0) {
+            "FixNavigationBarHaze: getSize() return not found."
+        }
+        
+        mutableSizeMethod.addInstructions(
+            returnIndex,
+            "invoke-static {p0}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
+        )
+        
         debugNavHaze("Hooks injected into h2.a() and g2.setVisible(Z).")
     }
 }
