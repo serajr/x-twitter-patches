@@ -18,4 +18,8 @@ public final class PersistentNavigationHaze {
     public static void onVisibilityChanged(boolean visible) {
         Log.i(TAG, "bottomTabsVisible=" + visible);
     }
+
+    public static void onBottomBarVisibilityChanged(boolean visible) {
+        Log.i(TAG, "Bottom bar visibility changed: " + visible);
+    }
 }
