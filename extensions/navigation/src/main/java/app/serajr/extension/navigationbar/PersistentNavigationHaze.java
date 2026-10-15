@@ -16,9 +16,6 @@ public final class PersistentNavigationHaze {
     }
 
     public static void onVisibilityChanged(boolean visible) {
-        if (lastVisibility == null || lastVisibility.booleanValue() != visible) {
-            lastVisibility = visible;
-            Log.i(TAG, "bottomTabsVisible=" + visible);
-        }
+        Log.i(TAG, "bottomTabsVisible=" + visible);
     }
 }
