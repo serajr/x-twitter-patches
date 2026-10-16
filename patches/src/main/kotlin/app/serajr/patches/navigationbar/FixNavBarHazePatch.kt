@@ -1,6 +1,7 @@
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.iface.Method
@@ -178,7 +179,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val sizeInstructions = sizeImplementation.instructions.toList()
         
         val returnIndex = sizeInstructions.indexOfLast {
-            it.opcode.name == "RETURN"
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN
         }
         
         require(returnIndex >= 0) {
@@ -197,6 +198,44 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
             """.trimIndent()
         )
+
+
+        // EXPERIMENT: Remove the bottom bar container clip.
+        // Keep the original visibility and size animations unchanged.
+
+        val clipInstructions = mutableMethod.implementation
+            ?.instructions
+            ?.toList()
+            ?: error("FixNavigationBarHaze: h2.a() has no instructions.")
+
+        val clipMatches = clipInstructions.withIndex().filter { (_, instruction) ->
+            val referenceInstruction = instruction as?
+                com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+
+            referenceInstruction?.reference?.toString() ==
+                "Landroidx/compose/ui/draw/h;->d(Landroidx/compose/ui/Modifier;)Landroidx/compose/ui/Modifier;"
+        }
+
+        require(clipMatches.size == 1) {
+            "FixNavigationBarHaze: expected one bottom bar clip, found ${clipMatches.size}."
+        }
+
+        val clipIndex = clipMatches.single().index
+
+        // Original:
+        // invoke-static {v1}, ...draw/h;->d(...)Modifier;
+        // move-result-object v12
+        //
+        // Experimental:
+        // move-object v12, v1
+        //
+        // Replace both original instructions with a direct Modifier copy.
+        mutableMethod.removeInstructions(clipIndex, 2)
+        mutableMethod.addInstructions(
+            clipIndex,
+            "move-object v12, v1"
+        )
+
         
         debugNavHaze("Hooks injected.")
     }
