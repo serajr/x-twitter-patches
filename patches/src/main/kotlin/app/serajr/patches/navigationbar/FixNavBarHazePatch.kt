@@ -192,13 +192,26 @@ val fixNavigationBarHazePatch = bytecodePatch(
         
         val resultRegister = returnInstruction.registerA
         
+        //mutableSizeMethod.addInstructions(
+        //    returnIndex,
+        //    """
+        //        invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
+        //    """.trimIndent()
+        //)
+
+        // EXPERIMENT 3:
+        // Preserve a minimum bottom bar size when hidden.
+        // Diagnostic only; does not change AnimatedVisibility.
+        
         mutableSizeMethod.addInstructions(
             returnIndex,
             """
                 invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
+                invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->getExperimentalBottomBarSize(I)I
+                move-result v$resultRegister
             """.trimIndent()
         )
-
+        
 
         // EXPERIMENT 2:
         // Apply native Haze to the AnimatedVisibility modifier.
