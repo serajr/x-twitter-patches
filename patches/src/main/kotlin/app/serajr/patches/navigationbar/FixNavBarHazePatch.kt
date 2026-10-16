@@ -212,50 +212,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
             """.trimIndent()
         )
         
-
-        // EXPERIMENT 2:
-        // Apply native Haze to the AnimatedVisibility modifier.
-        // Preserve the original clip, visibility and animations.
-
-        val hazeInstructions = mutableMethod.implementation
-            ?.instructions
-            ?.toList()
-            ?: error("FixNavigationBarHaze: h2.a() has no instructions.")
-
-        val anchorMatches = hazeInstructions.withIndex().filter { (_, instruction) ->
-            val referenceInstruction = instruction as?
-                com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
-
-            instruction.opcode == com.android.tools.smali.dexlib2.Opcode.SGET_OBJECT &&
-                referenceInstruction?.reference?.toString() ==
-                    "Lcom/x/ui/common/h2;->b:Landroidx/compose/animation/x1;"
-        }
-
-        require(anchorMatches.size == 1) {
-            "FixNavigationBarHaze: expected one animation anchor, found ${anchorMatches.size}."
-        }
-
-        val anchorIndex = anchorMatches.single().index
-
-        // At this point in h2.a():
-        // v12 = AnimatedVisibility Modifier
-        // v17 = Composer
-        // p1  = HazeState
-        //
-        // v13, v14 and v15 are overwritten by the original
-        // instructions before AnimatedVisibility is called.
-
-        mutableMethod.addInstructions(
-            anchorIndex,
-            """
-                move-object/from16 v13, v17
-                move-object/from16 v14, p1
-                const/4 v15, 0x6
-                invoke-static {v12, v14, v13, v15}, Lcom/x/compose/core/e0;->c(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/w0;Landroidx/compose/runtime/Composer;I)Landroidx/compose/ui/Modifier;
-                move-result-object v12
-            """.trimIndent()
-        )
-
-        debugNavHaze("Experimental outer AnimatedVisibility Haze installed.")
+        debugNavHaze("!")
     }
 }
