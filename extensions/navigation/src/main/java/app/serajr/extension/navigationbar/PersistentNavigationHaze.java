@@ -34,4 +34,16 @@ public final class PersistentNavigationHaze {
             Log.i(TAG, "Bottom bar animated size: " + size);
         }
     }
+
+    // EXPERIMENT 3:
+    // Keep approximately 35% of the observed full bar height.
+    //
+    // This value is intentionally fixed for this diagnostic test.
+    // It must not be used as a production solution.
+
+    private static final int EXPERIMENTAL_MIN_SIZE_PX = 103;
+
+    public static int getExperimentalBottomBarSize(int originalSize) {
+        return Math.max(originalSize, EXPERIMENTAL_MIN_SIZE_PX);
+    }
 }
