@@ -1,6 +1,7 @@
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.iface.Method
