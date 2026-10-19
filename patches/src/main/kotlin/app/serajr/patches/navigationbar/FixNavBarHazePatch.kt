@@ -1,15 +1,17 @@
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
-import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
+import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 
 private const val DEBUG = false
 
 private const val TARGET_CLASS = "Lcom/x/ui/common/h2;"
 private const val VISIBILITY_CLASS = "Lcom/x/ui/common/g2;"
+private const val CONTENT_CLASS = "Lcom/x/ui/common/e2;"
 
 private const val EXTENSION_CLASS =
     "Lapp/serajr/extension/navigationbar/PersistentNavigationHaze;"
@@ -31,6 +33,8 @@ val fixNavigationBarHazePatch = bytecodePatch(
     execute {
         var targetMethod: Method? = null
         var visibilityMethod: Method? = null
+        var contentMethod: Method? = null
+        var sizeMethod: Method? = null
 
         classDefForEach { classDef ->
             when (classDef.type.toString()) {
@@ -59,159 +63,115 @@ val fixNavigationBarHazePatch = bytecodePatch(
                             method.returnType == "V" &&
                             method.parameterTypes.map { it.toString() } == listOf("Z")
                     }
+
+                    sizeMethod = classDef.methods.firstOrNull { method ->
+                        method.name == "getSize" &&
+                            method.returnType == "I" &&
+                            method.parameterTypes.isEmpty()
+                    }
+                }
+
+                CONTENT_CLASS -> {
+                    contentMethod = classDef.methods.firstOrNull { method ->
+                        method.name == "invoke" &&
+                            method.returnType == "Ljava/lang/Object;" &&
+                            method.parameterTypes.map { it.toString() } == listOf(
+                                "Ljava/lang/Object;",
+                                "Ljava/lang/Object;",
+                                "Ljava/lang/Object;"
+                            )
+                    }
                 }
             }
         }
 
-        // Hook 1: extension initialization in h2.a()
-        val method = targetMethod
+        // Hook 1: Initialize the navigation Haze extension.
+        val originalTarget = targetMethod
             ?: error("FixNavigationBarHaze: h2.a() not found.")
 
-        val mutableClass = mutableClassDefBy(method.definingClass)
+        val mutableTarget = mutableClassDefBy(originalTarget.definingClass)
+            .methods.firstOrNull { it.toString() == originalTarget.toString() }
+            ?: error("FixNavigationBarHaze: mutable h2.a() not found.")
 
-        val mutableMethod = mutableClass.methods.firstOrNull {
-            it.toString() == method.toString()
-        } ?: error("FixNavigationBarHaze: mutable h2.a() not found.")
-
-        val implementation = mutableMethod.implementation
-            ?: error("FixNavigationBarHaze: h2.a() has no implementation.")
-
-        require(implementation.registerCount == 33) {
+        require(mutableTarget.implementation?.registerCount == 33) {
             "FixNavigationBarHaze: unexpected h2.a() register layout."
         }
 
-        mutableMethod.addInstructions(
+        mutableTarget.addInstructions(
             0,
             "invoke-static {}, ${EXTENSION_CLASS}->initialize()V"
         )
 
-        // Hook 2: actual visibility state changes in g2.setVisible(Z)
-        val g2Method = visibilityMethod
+        // Hook 2: Monitor bottom bar visibility changes.
+        val originalVisibility = visibilityMethod
             ?: error("FixNavigationBarHaze: g2.setVisible(Z) not found.")
 
-        val mutableG2Class = mutableClassDefBy(g2Method.definingClass)
+        val mutableVisibility = mutableClassDefBy(originalVisibility.definingClass)
+            .methods.firstOrNull { it.toString() == originalVisibility.toString() }
+            ?: error("FixNavigationBarHaze: mutable g2.setVisible(Z) not found.")
 
-        val mutableG2Method = mutableG2Class.methods.firstOrNull {
-            it.toString() == g2Method.toString()
-        } ?: error("FixNavigationBarHaze: mutable g2.setVisible(Z) not found.")
-
-        val g2Implementation = mutableG2Method.implementation
-            ?: error("FixNavigationBarHaze: g2.setVisible(Z) has no implementation.")
-
-        require(g2Implementation.registerCount == 2) {
+        require(mutableVisibility.implementation?.registerCount == 2) {
             "FixNavigationBarHaze: unexpected g2.setVisible(Z) register layout."
         }
 
-        mutableG2Method.addInstructions(
+        mutableVisibility.addInstructions(
             0,
             "invoke-static {p1}, ${EXTENSION_CLASS}->onBottomBarVisibilityChanged(Z)V"
         )
 
-        // Hook 3: Diagnostic hook: check whether e2 content is invoked
-        // while the bottom tabs are being hidden.
-        var e2Method: Method? = null
-
-        classDefForEach { classDef ->
-            if (classDef.type.toString() == "Lcom/x/ui/common/e2;") {
-                e2Method = classDef.methods.firstOrNull { method ->
-                    method.name == "invoke" &&
-                        method.returnType == "Ljava/lang/Object;" &&
-                        method.parameterTypes.map { it.toString() } == listOf(
-                            "Ljava/lang/Object;",
-                            "Ljava/lang/Object;",
-                            "Ljava/lang/Object;"
-                        )
-                }
-            }
-        }
-
-        val contentMethod = e2Method
+        // Hook 3: Monitor bottom bar content composition.
+        val originalContent = contentMethod
             ?: error("FixNavigationBarHaze: e2.invoke() not found.")
 
-        val mutableE2Class = mutableClassDefBy(contentMethod.definingClass)
+        val mutableContent = mutableClassDefBy(originalContent.definingClass)
+            .methods.firstOrNull { it.toString() == originalContent.toString() }
+            ?: error("FixNavigationBarHaze: mutable e2.invoke() not found.")
 
-        val mutableE2Method = mutableE2Class.methods.firstOrNull {
-            it.toString() == contentMethod.toString()
-        } ?: error("FixNavigationBarHaze: mutable e2.invoke() not found.")
-
-        require(mutableE2Method.implementation?.registerCount == 22) {
+        require(mutableContent.implementation?.registerCount == 22) {
             "FixNavigationBarHaze: unexpected e2.invoke() register layout."
         }
 
-        mutableE2Method.addInstructions(
+        mutableContent.addInstructions(
             0,
             "invoke-static {}, ${EXTENSION_CLASS}->onBottomBarContentComposed()V"
         )
-        
-        // Hook 4
-        var sizeMethod: Method? = null
 
-        classDefForEach { classDef ->
-            if (classDef.type.toString() == VISIBILITY_CLASS) {
-                sizeMethod = classDef.methods.firstOrNull { method ->
-                    method.name == "getSize" &&
-                        method.returnType == "I" &&
-                        method.parameterTypes.isEmpty()
-                }
-            }
-        }
-        
-        val originalSizeMethod = sizeMethod
+        // Hook 4: Monitor the animated bottom bar size.
+        val originalSize = sizeMethod
             ?: error("FixNavigationBarHaze: g2.getSize() not found.")
-        
-        val mutableSizeClass =
-            mutableClassDefBy(originalSizeMethod.definingClass)
-        
-        val mutableSizeMethod = mutableSizeClass.methods.firstOrNull {
-            it.toString() == originalSizeMethod.toString()
-        } ?: error("FixNavigationBarHaze: mutable g2.getSize() not found.")
-        
-        val sizeImplementation = mutableSizeMethod.implementation
+
+        val mutableSize = mutableClassDefBy(originalSize.definingClass)
+            .methods.firstOrNull { it.toString() == originalSize.toString() }
+            ?: error("FixNavigationBarHaze: mutable g2.getSize() not found.")
+
+        val sizeImplementation = mutableSize.implementation
             ?: error("FixNavigationBarHaze: g2.getSize() has no implementation.")
-        
+
         debugNavHaze(
             "g2.getSize() registerCount=${sizeImplementation.registerCount}"
         )
-        
-        // The original method returns an integer.
-        // Inject immediately before its RETURN instruction,
-        // using the same register as the return value.
-        val sizeInstructions = sizeImplementation.instructions.toList()
-        
-        val returnIndex = sizeInstructions.indexOfLast {
-            it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN
-        }
-        
-        require(returnIndex >= 0) {
-            "FixNavigationBarHaze: getSize() return not found."
-        }
-        
-        val returnInstruction = sizeInstructions[returnIndex]
-            as? com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
-            ?: error("FixNavigationBarHaze: unexpected getSize() return instruction.")
-        
-        val resultRegister = returnInstruction.registerA
-        
-        //mutableSizeMethod.addInstructions(
-        //    returnIndex,
-        //    """
-        //        invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
-        //    """.trimIndent()
-        //)
 
-        // EXPERIMENT 3:
-        // Preserve a minimum bottom bar size when hidden.
-        // Diagnostic only; does not change AnimatedVisibility.
-        
-        mutableSizeMethod.addInstructions(
+        val sizeInstructions = sizeImplementation.instructions.toList()
+
+        val returnIndex = sizeInstructions.indexOfLast {
+            it.opcode == Opcode.RETURN
+        }
+
+        require(returnIndex >= 0) {
+            "FixNavigationBarHaze: g2.getSize() return not found."
+        }
+
+        val returnInstruction = sizeInstructions[returnIndex]
+            as? OneRegisterInstruction
+            ?: error("FixNavigationBarHaze: unexpected getSize() return instruction.")
+
+        val resultRegister = returnInstruction.registerA
+
+        mutableSize.addInstructions(
             returnIndex,
-            """
-                invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V
-                invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->getExperimentalBottomBarSize(I)I
-                move-result v$resultRegister
-            """.trimIndent()
+            "invoke-static {v$resultRegister}, ${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
         )
-        
-        debugNavHaze("!")
+
+        debugNavHaze("Diagnostic hooks installed.")
     }
 }
