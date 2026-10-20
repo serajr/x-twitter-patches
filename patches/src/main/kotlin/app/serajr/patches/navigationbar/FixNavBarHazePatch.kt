@@ -89,7 +89,7 @@ private fun debugNavHaze(message: String) {
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Preserves native navigation bar Haze when the bottom bar hides (X 12.31 experimental).",
+    description = "Preserves native navigation bar Haze when the bottom bar hides (X 12.31 experimental)!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
