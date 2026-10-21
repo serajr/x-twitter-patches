@@ -63,7 +63,7 @@ private fun debugNavHaze(message: String) {
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase A diagnostic: validates an empty Compose node and bottom bar hooks on X 12.35.",
+    description = "Phase A diagnostic: validates an empty Compose node and bottom bar hooks on X 12.35!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
