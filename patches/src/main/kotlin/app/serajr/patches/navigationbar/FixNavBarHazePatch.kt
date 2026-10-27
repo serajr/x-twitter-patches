@@ -87,7 +87,7 @@ private fun safeDrawLog(tag: String): String = """
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B4 diagnostics: logs HazeEffect geometry, position, and render paths on X 12.35!",
+    description = "Phase B4.1 diagnostics: logs HazeEffect geometry and verified draw paths on X 12.35!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -364,33 +364,27 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val renderInstructions = mutableRender.implementation!!
             .instructions.toList()
 
-        // E1 and F1 are distinct render phases. Log each call without
-        // changing the original conditional branches or their arguments.
-        val renderCalls = listOf("P1", "E1", "F1")
-        val renderTags = mapOf(
-            "P1" to "NavHazeActive",
-            "E1" to "NavHazeE1",
-            "F1" to "NavHazeF1"
-        )
-        val renderPoints = renderCalls.map { name ->
-            val matches = renderInstructions.indices.filter { index ->
-                val instruction = renderInstructions[index]
-                instruction.opcode == Opcode.INVOKE_VIRTUAL &&
-                    (instruction as? ReferenceInstruction)
-                        ?.reference?.toString()?.contains(
-                            "$HAZE_NODE_CLASS->$name("
-                        ) == true
-            }
-            require(matches.size == 1) {
-                "FixNavigationBarHaze: expected one $name call in G1()."
-            }
-            matches.single() to renderTags.getValue(name)
-        }
-        // Descending insertion order preserves indices from the snapshot.
-        renderPoints.sortedByDescending { it.first }.forEach { (index, tag) ->
-            mutableRender.addInstructions(index, safeDrawLog(tag))
+        // B4.1: Keep the verified P1 hook. E1/F1 instrumentation is
+        // deferred until their exact call sites and register liveness
+        // are verified in the target APK.
+        val p1Indices = renderInstructions.indices.filter { index ->
+            val instruction = renderInstructions[index]
+            instruction.opcode == Opcode.INVOKE_VIRTUAL &&
+                (instruction as? ReferenceInstruction)
+                    ?.reference?.toString()?.contains(
+                        "$HAZE_NODE_CLASS->P1("
+                    ) == true
         }
 
-        debugNavHaze("Phase B4 diagnostics installed.")
+        require(p1Indices.size == 1) {
+            "FixNavigationBarHaze: expected exactly one P1 call in G1()."
+        }
+
+        mutableRender.addInstructions(
+            p1Indices.single(),
+            safeDrawLog("NavHazeActive")
+        )
+
+        debugNavHaze("Phase B4.1 diagnostics installed.")
     }
 }
