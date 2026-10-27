@@ -98,19 +98,23 @@ private fun rendererStateLog(): String = """
     invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
     iget-boolean v4, p0, Ldev/chrisbanes/haze/x;->F:Z
     invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
-    const-string v4, " renderer="
+    const-string v4, " rendererIsH0="
     invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
     iget-object v5, p0, Ldev/chrisbanes/haze/x;->f0:Ldev/chrisbanes/haze/blur/f;
-    const-string v6, "null"
-    if-eqz v5, :b5_renderer_done
+    const/4 v6, 0x0
+    if-eqz v5, :b5_no_renderer
     iget-object v5, v5, Ldev/chrisbanes/haze/blur/f;->i:Ldev/chrisbanes/haze/blur/e;
-    if-eqz v5, :b5_renderer_done
-    invoke-virtual {v5}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
-    move-result-object v5
-    invoke-virtual {v5}, Ljava/lang/Class;->getName()Ljava/lang/String;
-    move-result-object v6
-    :b5_renderer_done
-    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    instance-of v6, v5, Ldev/chrisbanes/haze/blur/h0;
+    :b5_no_renderer
+    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
+    const-string v4, " rendererIsC0="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    instance-of v6, v5, Ldev/chrisbanes/haze/blur/c0;
+    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
+    const-string v4, " rendererIsU="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    instance-of v6, v5, Ldev/chrisbanes/haze/blur/u;
+    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
     invoke-virtual {v3}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
     move-result-object v4
     const-string v5, "NavHazeState"
@@ -138,7 +142,7 @@ private fun safeDrawLog(tag: String): String = """
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B5 diagnostics: tracks Haze renderer, I1 state and cleanup without changing stock behavior on X 12.35!",
+    description = "Phase B5.1 diagnostics: tracks Haze renderer, I1 state and cleanup without changing stock behavior on X 12.35!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -471,6 +475,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(mutableCleanup.implementation?.registerCount == 3)
         mutableCleanup.addInstructions(0, cleanupEntryLog())
 
-        debugNavHaze("Phase B5 diagnostics installed.")
+        debugNavHaze("Phase B5.1 diagnostics installed.")
     }
 }
