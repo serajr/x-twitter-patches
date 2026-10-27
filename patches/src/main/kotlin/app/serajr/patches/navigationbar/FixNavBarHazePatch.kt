@@ -19,30 +19,34 @@ private const val EXTENSION_CLASS =
     "Lapp/serajr/extension/navigationbar/PersistentNavigationHaze;"
 
 private const val GEOMETRY_LOG_TAG = "NavHazeGeometry"
-private const val DRAW_LOG_TAG = "NavHazeDraw"
 
 private fun debugNavHaze(message: String) {
     if (DEBUG) println("FixNavigationBarHaze -> $message")
 }
 
-private fun drawLog(event: String): String = """
-    new-instance v2, Ljava/lang/StringBuilder;
-    invoke-direct {v2}, Ljava/lang/StringBuilder;-><init>()V
-    const-string v1, "$event node="
-    invoke-virtual {v2, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+/*
+ * Uses only v3 and v4.
+ *
+ * W(): these registers are available at method entry and
+ * immediately before the G1() invocation.
+ *
+ * G1(): these registers are available immediately before P1().
+ *
+ * No original argument registers are modified.
+ */
+private fun safeDrawLog(tag: String): String = """
     invoke-static {p0}, Ljava/lang/System;->identityHashCode(Ljava/lang/Object;)I
-    move-result v0
-    invoke-virtual {v2, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
-    invoke-virtual {v2}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
-    move-result-object v2
-    const-string v1, "$DRAW_LOG_TAG"
-    invoke-static {v1, v2}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+    move-result v3
+    invoke-static {v3}, Ljava/lang/Integer;->toString(I)Ljava/lang/String;
+    move-result-object v4
+    const-string v3, "$tag"
+    invoke-static {v3, v4}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 """.trimIndent()
 
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B3 diagnostics: monitors bottom bar animation, HazeEffect geometry, and draw paths on X 12.35!",
+    description = "Phase B3-safe diagnostics: monitors HazeEffect geometry and draw paths while preserving original register values on X 12.35!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -137,7 +141,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
             }
         }
 
-        // PHASE A
+        // PHASE A — ORIGINAL DIAGNOSTICS
 
         val originalTarget = targetMethod
             ?: error("FixNavigationBarHaze: p2.a() not found.")
@@ -205,7 +209,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 "${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
         )
 
-        // PHASE B2 — GEOMETRY
+        // PHASE B2 — GEOMETRY DIAGNOSTICS
 
         fun installGeometryHook(
             original: Method?,
@@ -266,7 +270,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         installGeometryHook(hazeSizeMethod, "X1", "U", "Size")
         installGeometryHook(hazeOffsetMethod, "W1", "V", "Offset")
 
-        // PHASE B3 — DRAW DIAGNOSTICS
+        // PHASE B3-SAFE — DRAW METHOD
 
         val originalDraw = hazeDrawMethod
             ?: error("FixNavigationBarHaze: haze.x.W() not found.")
@@ -280,31 +284,32 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val drawInstructions = mutableDraw.implementation!!
             .instructions.toList()
 
-        val g1Index = drawInstructions.indexOfFirst {
-            it.opcode == Opcode.INVOKE_VIRTUAL &&
-                (it as? ReferenceInstruction)
+        val g1Indices = drawInstructions.indices.filter { index ->
+            val instruction = drawInstructions[index]
+            instruction.opcode == Opcode.INVOKE_VIRTUAL &&
+                (instruction as? ReferenceInstruction)
                     ?.reference?.toString()?.contains(
                         "$HAZE_NODE_CLASS->G1("
                     ) == true
         }
 
-        require(g1Index >= 0) {
-            "FixNavigationBarHaze: G1 call not found in W()."
+        require(g1Indices.size == 1) {
+            "FixNavigationBarHaze: expected exactly one G1 call in W()."
         }
 
-        // Insert the G1 log before the original call.
+        // Insert at the later index first.
         mutableDraw.addInstructions(
-            g1Index,
-            drawLog("DRAW_G1")
+            g1Indices.single(),
+            safeDrawLog("NavHazeG1")
         )
 
-        // Insert entry log last, preserving the calculated index.
+        // Method-entry diagnostics use only v3/v4.
         mutableDraw.addInstructions(
             0,
-            drawLog("DRAW_ENTER")
+            safeDrawLog("NavHazeEnter")
         )
 
-        // PHASE B3 — BLUR ACTIVATION
+        // PHASE B3-SAFE — RENDER ACTIVATION
 
         val originalRender = hazeRenderMethod
             ?: error("FixNavigationBarHaze: haze.x.G1() not found.")
@@ -318,23 +323,24 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val renderInstructions = mutableRender.implementation!!
             .instructions.toList()
 
-        val p1Index = renderInstructions.indexOfFirst {
-            it.opcode == Opcode.INVOKE_VIRTUAL &&
-                (it as? ReferenceInstruction)
+        val p1Indices = renderInstructions.indices.filter { index ->
+            val instruction = renderInstructions[index]
+            instruction.opcode == Opcode.INVOKE_VIRTUAL &&
+                (instruction as? ReferenceInstruction)
                     ?.reference?.toString()?.contains(
                         "$HAZE_NODE_CLASS->P1("
                     ) == true
         }
 
-        require(p1Index >= 0) {
-            "FixNavigationBarHaze: P1 call not found in G1()."
+        require(p1Indices.size == 1) {
+            "FixNavigationBarHaze: expected exactly one P1 call in G1()."
         }
 
         mutableRender.addInstructions(
-            p1Index,
-            drawLog("G1_BLUR_ACTIVE")
+            p1Indices.single(),
+            safeDrawLog("NavHazeActive")
         )
 
-        debugNavHaze("Phase B3 diagnostics installed.")
+        debugNavHaze("Phase B3-safe diagnostics installed.")
     }
 }
