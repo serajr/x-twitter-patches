@@ -34,6 +34,47 @@ private fun debugNavHaze(message: String) {
  *
  * No original argument registers are modified.
  */
+/*
+ * Entry-only geometry snapshot. W() has 10 registers (v0..v7 locals),
+ * so v3..v7 are free before its original first instruction.
+ * Does not modify T, U, V or any render-state field.
+ */
+private fun geometrySnapshotLog(): String = """
+    new-instance v3, Ljava/lang/StringBuilder;
+    invoke-direct {v3}, Ljava/lang/StringBuilder;-><init>()V
+    const-string v4, "node="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-static {p0}, Ljava/lang/System;->identityHashCode(Ljava/lang/Object;)I
+    move-result v4
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    const-string v4, " T="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    iget-wide v5, p0, Ldev/chrisbanes/haze/x;->T:J
+    invoke-static {v5, v6}, Ljava/lang/Long;->toHexString(J)Ljava/lang/String;
+    move-result-object v4
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    const-string v4, " U="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    iget-wide v5, p0, Ldev/chrisbanes/haze/x;->U:J
+    invoke-static {v5, v6}, Ljava/lang/Long;->toHexString(J)Ljava/lang/String;
+    move-result-object v4
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    const-string v4, " V="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    iget-wide v5, p0, Ldev/chrisbanes/haze/x;->V:J
+    invoke-static {v5, v6}, Ljava/lang/Long;->toHexString(J)Ljava/lang/String;
+    move-result-object v4
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    const-string v4, " k0="
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    iget-boolean v4, p0, Ldev/chrisbanes/haze/x;->k0:Z
+    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
+    invoke-virtual {v3}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+    move-result-object v4
+    const-string v7, "NavHazeSnapshot"
+    invoke-static {v7, v4}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+""".trimIndent()
+
 private fun safeDrawLog(tag: String): String = """
     invoke-static {p0}, Ljava/lang/System;->identityHashCode(Ljava/lang/Object;)I
     move-result v3
@@ -46,7 +87,7 @@ private fun safeDrawLog(tag: String): String = """
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B3-safe diagnostics: monitors HazeEffect geometry and draw paths while preserving original register values on X 12.35!",
+    description = "Phase B4 diagnostics: logs HazeEffect geometry, position, and render paths on X 12.35!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -303,10 +344,10 @@ val fixNavigationBarHazePatch = bytecodePatch(
             safeDrawLog("NavHazeG1")
         )
 
-        // Method-entry diagnostics use only v3/v4.
+        // Method-entry diagnostics; both snippets use only dead locals.
         mutableDraw.addInstructions(
             0,
-            safeDrawLog("NavHazeEnter")
+            safeDrawLog("NavHazeEnter") + "\n" + geometrySnapshotLog()
         )
 
         // PHASE B3-SAFE — RENDER ACTIVATION
@@ -323,24 +364,33 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val renderInstructions = mutableRender.implementation!!
             .instructions.toList()
 
-        val p1Indices = renderInstructions.indices.filter { index ->
-            val instruction = renderInstructions[index]
-            instruction.opcode == Opcode.INVOKE_VIRTUAL &&
-                (instruction as? ReferenceInstruction)
-                    ?.reference?.toString()?.contains(
-                        "$HAZE_NODE_CLASS->P1("
-                    ) == true
-        }
-
-        require(p1Indices.size == 1) {
-            "FixNavigationBarHaze: expected exactly one P1 call in G1()."
-        }
-
-        mutableRender.addInstructions(
-            p1Indices.single(),
-            safeDrawLog("NavHazeActive")
+        // E1 and F1 are distinct render phases. Log each call without
+        // changing the original conditional branches or their arguments.
+        val renderCalls = listOf("P1", "E1", "F1")
+        val renderTags = mapOf(
+            "P1" to "NavHazeActive",
+            "E1" to "NavHazeE1",
+            "F1" to "NavHazeF1"
         )
+        val renderPoints = renderCalls.map { name ->
+            val matches = renderInstructions.indices.filter { index ->
+                val instruction = renderInstructions[index]
+                instruction.opcode == Opcode.INVOKE_VIRTUAL &&
+                    (instruction as? ReferenceInstruction)
+                        ?.reference?.toString()?.contains(
+                            "$HAZE_NODE_CLASS->$name("
+                        ) == true
+            }
+            require(matches.size == 1) {
+                "FixNavigationBarHaze: expected one $name call in G1()."
+            }
+            matches.single() to renderTags.getValue(name)
+        }
+        // Descending insertion order preserves indices from the snapshot.
+        renderPoints.sortedByDescending { it.first }.forEach { (index, tag) ->
+            mutableRender.addInstructions(index, safeDrawLog(tag))
+        }
 
-        debugNavHaze("Phase B3-safe diagnostics installed.")
+        debugNavHaze("Phase B4 diagnostics installed.")
     }
 }
