@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.40.0",
+  "version": "1.41.0-dev.1",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -45,7 +45,7 @@
     },
     {
       "name": "Fix Navigation Bar Haze",
-      "description": "Phase B3 diagnostics: monitors bottom bar animation, HazeEffect geometry, and draw paths on X 12.35!",
+      "description": "Phase B3-safe diagnostics: monitors HazeEffect geometry and draw paths while preserving original register values on X 12.35!",
       "default": false,
       "category": null,
       "dependencies": [],
