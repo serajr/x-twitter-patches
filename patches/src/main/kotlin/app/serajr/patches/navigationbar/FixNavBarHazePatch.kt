@@ -115,27 +115,7 @@ private fun rendererStateLog(): String = """
     invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
     instance-of v6, v5, Ldev/chrisbanes/haze/blur/u;
     invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
-    const-string v4, " layerPresent="
-    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-    if-eqz v6, :b61_no_u_renderer
-    check-cast v5, Ldev/chrisbanes/haze/blur/u;
-    iget-object v5, v5, Ldev/chrisbanes/haze/blur/u;->b:Landroidx/compose/ui/graphics/layer/d;
-    goto :b61_layer_checked
-    :b61_no_u_renderer
-    const/4 v5, 0x0
-    :b61_layer_checked
-    const/4 v6, 0x0
-    if-eqz v5, :b61_no_layer
-    const/4 v6, 0x1
-    :b61_no_layer
-    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
-    const-string v4, " layerReleased="
-    invoke-virtual {v3, v4}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
-    const/4 v6, 0x0
-    if-eqz v5, :b61_no_layer_release
-    iget-boolean v6, v5, Landroidx/compose/ui/graphics/layer/d;->s:Z
-    :b61_no_layer_release
-    invoke-virtual {v3, v6}, Ljava/lang/StringBuilder;->append(Z)Ljava/lang/StringBuilder;
+    invoke-static {v5}, ${EXTENSION_CLASS}->inspectHazeRenderer(Ljava/lang/Object;)V
     invoke-virtual {v3}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
     move-result-object v4
     const-string v5, "NavHazeState"
@@ -163,7 +143,7 @@ private fun safeDrawLog(tag: String): String = """
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B6.1 diagnostics: extends stable B5.1 renderer state with graphics-layer presence and release state; stock behavior unchanged.",
+    description = "Phase B6.2 diagnostics: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -446,7 +426,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val renderInstructions = mutableRender.implementation!!
             .instructions.toList()
 
-        // B6.1 (based on B5.1): Read I1's EXISTING move-result. Do not call I1 again.
+        // B5: Read I1's EXISTING move-result. Do not call I1 again.
         val i1CallIndices = renderInstructions.indices.filter { index ->
             val instruction = renderInstructions[index]
             instruction.opcode == Opcode.INVOKE_VIRTUAL &&
@@ -496,6 +476,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(mutableCleanup.implementation?.registerCount == 3)
         mutableCleanup.addInstructions(0, cleanupEntryLog())
 
-        debugNavHaze("Phase B6.1 diagnostics installed.")
+        debugNavHaze("Phase B6.2 diagnostics installed.")
     }
 }
