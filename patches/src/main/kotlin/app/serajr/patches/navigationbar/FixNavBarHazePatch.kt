@@ -143,7 +143,7 @@ private fun safeDrawLog(tag: String): String = """
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B6.2 diagnostics: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension.",
+    description = "Phase B6.2 diagnostics: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension!",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
