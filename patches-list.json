@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.53.0-dev.1",
+  "version": "1.53.0-dev.2",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -45,7 +45,7 @@
     },
     {
       "name": "Fix Navigation Bar Haze",
-      "description": "Phase C2.3 experimental persistent HazeEffect, preserving B6.2 diagnostics.",
+      "description": "Phase B6.2 diagnostics: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension.",
       "default": false,
       "category": null,
       "dependencies": [],
