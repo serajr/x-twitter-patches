@@ -142,16 +142,13 @@ private fun safeDrawLog(tag: String): String = """
 """.trimIndent()
 
 
-// PHASE C2.1 — Persistent real HazeEffect in the bottom system navigation inset.
-// The original AnimatedVisibility and its 200 ms animation remain unchanged.
-// The temporary m2 instance receives null content callbacks, guarded below.
-private fun persistentNavHazeComposition(): String = """
-    if-eqz p7, :c21_navhaze_skip
-    if-nez v19, :c21_navhaze_skip
-
-    const v7, 0x83c6020
-    invoke-virtual {v15, v7}, Landroidx/compose/runtime/o0;->j0(I)V
-
+// REA C2 blueprint adapted to Dalvik register formats. Experimental: device validation required.
+private fun c21PersistentEffect(): String = """
+    if-eqz p7, :c21_skip
+    if-nez v19, :c21_skip
+    const v20, 0x83c6020
+    move/from16 v8, v20
+    invoke-virtual {v15, v8}, Landroidx/compose/runtime/o0;->j0(I)V
     move/from16 v21, p7
     move-object/from16 v22, v2
     const/16 v23, 0x0
@@ -159,30 +156,24 @@ private fun persistentNavHazeComposition(): String = """
     const/high16 v25, 0x42600000
     sub-float v24, v24, v25
     const/16 v25, 0x0
-
     new-instance v20, Lcom/x/ui/common/m2;
     invoke-direct/range {v20 .. v25}, Lcom/x/ui/common/m2;-><init>(ZLdev/chrisbanes/haze/x0;Landroidx/compose/runtime/internal/g;FLandroidx/compose/runtime/internal/g;)V
-
     sget-object v9, Landroidx/compose/ui/q;->a:Landroidx/compose/ui/q;
     const/high16 v7, 0x3f800000
     invoke-static {v9, v7}, Landroidx/compose/foundation/layout/l3;->g(Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;
     move-result-object v9
-
     sget-object v7, Landroidx/compose/foundation/layout/w;->a:Landroidx/compose/foundation/layout/w;
     sget-object v11, Landroidx/compose/ui/b;->i:Landroidx/compose/ui/i;
     invoke-virtual {v7, v9, v11}, Landroidx/compose/foundation/layout/w;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/d;)Landroidx/compose/ui/Modifier;
     move-result-object v9
-
     const v7, 0x3f666666
     invoke-static {v9, v7}, Landroidx/compose/ui/a;->e(Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;
     move-result-object v9
-
     move-object/from16 v19, v15
     const v10, 0x83c6021
-    move-object/from16 v11, v20
-    invoke-static {v10, v11, v15}, Landroidx/compose/runtime/internal/h;->e(ILkotlin/Function;Landroidx/compose/runtime/Composer;)Landroidx/compose/runtime/internal/g;
+    move-object/from16 v8, v20
+    invoke-static {v10, v8, v19}, Landroidx/compose/runtime/internal/h;->e(ILkotlin/Function;Landroidx/compose/runtime/Composer;)Landroidx/compose/runtime/internal/g;
     move-result-object v10
-
     sget-object v12, Landroidx/compose/foundation/layout/c0;->a:Landroidx/compose/foundation/layout/c0;
     const/4 v13, 0x1
     move-object v14, v9
@@ -192,20 +183,18 @@ private fun persistentNavHazeComposition(): String = """
     move-object/from16 v18, v10
     const v20, 0x180006
     const/16 v21, 0x10
-
     invoke-static/range {v12 .. v21}, Landroidx/compose/animation/p;->h(Landroidx/compose/foundation/layout/b0;ZLandroidx/compose/ui/Modifier;Landroidx/compose/animation/y1;Landroidx/compose/animation/z1;Ljava/lang/String;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;II)V
-
     move-object/from16 v15, v19
-    const/4 v7, 0x0
-    invoke-virtual {v15, v7}, Landroidx/compose/runtime/o0;->u(Z)V
-
-    :c21_navhaze_skip
+    const/4 v20, 0x0
+    move/from16 v8, v20
+    invoke-virtual {v15, v8}, Landroidx/compose/runtime/o0;->u(Z)V
+    :c21_skip
 """.trimIndent()
 
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase C2.1 experimental persistent real HazeEffect in the system navigation inset; retains B6.2 diagnostics!",
+    description = "Phase C2.1 experimental persistent HazeEffect, preserving B6.2 diagnostics.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -306,74 +295,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
             }
         }
 
-        // C2.1: structural anchors are resolved in the ORIGINAL target methods.
-        // Insert in descending instruction order to preserve earlier indices.
-        run {
-            val original = targetMethod ?: error("C2.1: p2.a not found")
-            val mutable = mutableClassDefBy(original.definingClass)
-                .methods.firstOrNull { it.toString() == original.toString() }
-                ?: error("C2.1: mutable p2.a not found")
-            require(mutable.implementation?.registerCount == 37)
-            val insns = mutable.implementation!!.instructions.toList()
-            fun ref(index: Int): String? =
-                (insns[index] as? ReferenceInstruction)?.reference?.toString()
-            val k2Calls = insns.indices.filter {
-                ref(it)?.startsWith("Lcom/x/ui/common/k2;->a(") == true
-            }
-            require(k2Calls.size == 1) { "C2.1: expected one k2.a call" }
-            val k2Index = k2Calls.single()
-            require(k2Index + 1 < insns.size &&
-                insns[k2Index + 1].opcode == Opcode.INVOKE_VIRTUAL &&
-                ref(k2Index + 1)?.contains("Landroidx/compose/runtime/o0;->u(Z)V") == true
-            ) { "C2.1: outer Box closure does not follow k2.a" }
-            val insetIndices = (0 until k2Index).filter { index ->
-                val instr = insns[index]
-                instr.opcode == Opcode.MOVE_FROM16 &&
-                    (instr as? TwoRegisterInstruction)?.let {
-                        it.registerA == 16 && it.registerB == 4
-                    } == true
-            }
-            require(insetIndices.size == 1) { "C2.1: inset register anchor not unique" }
-            // After k2.a; before the outer Box's u(true).
-            mutable.addInstructions(k2Index + 1, persistentNavHazeComposition())
-            // Save the inset while v16 still contains its original float value.
-            mutable.addInstructions(insetIndices.single() + 1, "move/from16 v25, v16")
-        }
-
-        run {
-            val original = contentMethod ?: error("C2.1: m2.invoke not found")
-            val mutable = mutableClassDefBy(original.definingClass)
-                .methods.firstOrNull { it.toString() == original.toString() }
-                ?: error("C2.1: mutable m2.invoke not found")
-            require(mutable.implementation?.registerCount == 22)
-            val insns = mutable.implementation!!.instructions.toList()
-            fun ref(index: Int): String? =
-                (insns[index] as? ReferenceInstruction)?.reference?.toString()
-            val divider = insns.indices.filter {
-                ref(it)?.startsWith("Landroidx/compose/material3/z;->f(") == true
-            }.single()
-            val body = (divider until insns.size).filter {
-                ref(it)?.startsWith("Landroidx/compose/runtime/internal/g;->invoke(") == true
-            }.first()
-            val action = insns.indices.filter {
-                ref(it)?.startsWith("Landroidx/compose/material3/v8;->a(") == true
-            }.single()
-            val actionField = (body until action).filter {
-                ref(it) == "Lcom/x/ui/common/m2;->e:Landroidx/compose/runtime/internal/g;"
-            }.single()
-            val groupEnd = (0 until divider).filter {
-                ref(it) == "Landroidx/compose/runtime/i;->w(Landroidx/compose/runtime/Composer;)V"
-            }.last()
-            require(groupEnd < divider && divider < body && body < actionField && actionField < action)
-            mutable.addInstructions(action + 1, ":c21_m2_action")
-            mutable.addInstructions(actionField + 1, "if-eqz v8, :c21_m2_action")
-            mutable.addInstructions(body + 1, ":c21_m2_body")
-            mutable.addInstructions(groupEnd + 1, """
-                iget-object v8, v0, Lcom/x/ui/common/m2;->c:Landroidx/compose/runtime/internal/g;
-                if-eqz v8, :c21_m2_body
-            """.trimIndent())
-        }
-
         // PHASE A — ORIGINAL DIAGNOSTICS
 
         val originalTarget = targetMethod
@@ -441,6 +362,60 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "invoke-static {v${returnInstruction.registerA}}, " +
                 "${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
         )
+
+        // PHASE C2.1 — EXPERIMENTAL REAL HAZE (X 12.35 ONLY)
+        // Structural checks intentionally fail closed on an unexpected APK.
+        fun refOf(instruction: com.android.tools.smali.dexlib2.iface.instruction.Instruction): String? =
+            (instruction as? ReferenceInstruction)?.reference?.toString()
+
+        // Inset is stored in v16 immediately before the first fillMaxWidth modifier.
+        val p2Instructions = mutableTarget.implementation!!.instructions.toList()
+        val insetCandidates = p2Instructions.indices.filter { i ->
+            val inst = p2Instructions[i]
+            inst.opcode == Opcode.MOVE_FROM16 &&
+                (inst as? TwoRegisterInstruction)?.let { it.registerA == 16 && it.registerB == 4 } == true
+        }
+        require(insetCandidates.size == 1) { "C2.1: unique nav inset assignment not found" }
+        val sourceIndices = p2Instructions.indices.filter { i ->
+            refOf(p2Instructions[i]) ==
+                "Lcom/x/ui/common/k2;->a(Lcom/x/ui/common/o2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V"
+        }
+        require(sourceIndices.size == 1) { "C2.1: unique k2.a source anchor not found" }
+        val sourceIndex = sourceIndices.single()
+        require(insetCandidates.single() < sourceIndex)
+        require(p2Instructions[sourceIndex + 1].opcode == Opcode.INVOKE_VIRTUAL &&
+            refOf(p2Instructions[sourceIndex + 1]) ==
+                "Landroidx/compose/runtime/o0;->u(Z)V") {
+            "C2.1: expected Box group close immediately after k2.a"
+        }
+        // Insert at the later index first, keeping the inset anchor unchanged.
+        mutableTarget.addInstructions(sourceIndex + 1, c21PersistentEffect())
+        mutableTarget.addInstructions(insetCandidates.single() + 1, "move/from16 v25, v16")
+
+        val m2Instructions = mutableContent.implementation!!.instructions.toList()
+        val dividerIndices = m2Instructions.indices.filter { i ->
+            refOf(m2Instructions[i]) ==
+                "Lcom/x/compose/theme/d;->a(Landroidx/compose/runtime/Composer;I)Lcom/x/compose/theme/e;"
+        }
+        val contentIndices = m2Instructions.indices.filter { i ->
+            refOf(m2Instructions[i]) ==
+                "Landroidx/compose/runtime/internal/g;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        }
+        val actionIndices = m2Instructions.indices.filter { i ->
+            refOf(m2Instructions[i]) ==
+                "Landroidx/compose/material3/v8;->a(Landroidx/compose/ui/Modifier;JJLandroidx/compose/foundation/layout/j2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V"
+        }
+        require(dividerIndices.size == 1 && contentIndices.size == 1 && actionIndices.size == 1)
+        require(dividerIndices.single() < contentIndices.single() && contentIndices.single() < actionIndices.single())
+        val actionIndex = actionIndices.single()
+        // Insertion order descending; the action guard targets the instruction after v8.a.
+        mutableContent.addInstructions(actionIndex + 1, ":c21_after_action")
+        mutableContent.addInstructions(actionIndex, "if-eqz v8, :c21_after_action")
+        mutableContent.addInstructions(contentIndices.single() + 1, ":c21_after_divider")
+        mutableContent.addInstructions(dividerIndices.single(), """
+            iget-object v8, v0, Lcom/x/ui/common/m2;->c:Landroidx/compose/runtime/internal/g;
+            if-eqz v8, :c21_after_divider
+        """.trimIndent())
 
         // PHASE B2 — GEOMETRY DIAGNOSTICS
 
@@ -606,6 +581,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(mutableCleanup.implementation?.registerCount == 3)
         mutableCleanup.addInstructions(0, cleanupEntryLog())
 
-        debugNavHaze("Phase C2.1 visual experiment and B6.2 diagnostics installed.")
+        debugNavHaze("Phase C2.1 experimental Haze and B6.2 diagnostics installed.")
     }
 }
