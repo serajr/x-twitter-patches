@@ -189,12 +189,13 @@ private fun c21PersistentEffect(): String = """
     move/from16 v8, v20
     invoke-virtual {v15, v8}, Landroidx/compose/runtime/o0;->u(Z)V
     :c21_skip
+    nop
 """.trimIndent()
 
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase C2.2 experimental persistent HazeEffect, preserving B6.2 diagnostics!",
+    description = "Phase C2.3 experimental persistent HazeEffect, preserving B6.2 diagnostics.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -375,18 +376,18 @@ val fixNavigationBarHazePatch = bytecodePatch(
             inst.opcode == Opcode.MOVE_FROM16 &&
                 (inst as? TwoRegisterInstruction)?.let { it.registerA == 16 && it.registerB == 4 } == true
         }
-        require(insetCandidates.size == 1) { "C2.2: unique nav inset assignment not found" }
+        require(insetCandidates.size == 1) { "C2.3: unique nav inset assignment not found" }
         val sourceIndices = p2Instructions.indices.filter { i ->
             refOf(p2Instructions[i]) ==
                 "Lcom/x/ui/common/k2;->a(Lcom/x/ui/common/o2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V"
         }
-        require(sourceIndices.size == 1) { "C2.2: unique k2.a source anchor not found" }
+        require(sourceIndices.size == 1) { "C2.3: unique k2.a source anchor not found" }
         val sourceIndex = sourceIndices.single()
         require(insetCandidates.single() < sourceIndex)
         require(p2Instructions[sourceIndex + 1].opcode == Opcode.INVOKE_VIRTUAL &&
             refOf(p2Instructions[sourceIndex + 1]) ==
                 "Landroidx/compose/runtime/o0;->u(Z)V") {
-            "C2.2: expected Box group close immediately after k2.a"
+            "C2.3: expected Box group close immediately after k2.a"
         }
         // Insert at the later index first, keeping the inset anchor unchanged.
         mutableTarget.addInstructions(sourceIndex + 1, c21PersistentEffect())
@@ -409,18 +410,18 @@ val fixNavigationBarHazePatch = bytecodePatch(
         // Select the call immediately preceding the divider/content callback,
         // not the earlier Haze theme lookup or the later action theme lookup.
         require(dividerIndices.size == 3 && contentIndices.size == 1 && actionIndices.size == 1) {
-            "C2.2: unexpected m2 call counts: theme=${dividerIndices.size}, " +
+            "C2.3: unexpected m2 call counts: theme=${dividerIndices.size}, " +
                 "content=${contentIndices.size}, action=${actionIndices.size}"
         }
         val dividerIndex = dividerIndices.singleOrNull { it < contentIndices.single() &&
             dividerIndices.none { other -> other > it && other < contentIndices.single() } }
-            ?: error("C2.2: divider theme call before content not found")
+            ?: error("C2.3: divider theme call before content not found")
         require(dividerIndex < contentIndices.single() && contentIndices.single() < actionIndices.single())
         val actionIndex = actionIndices.single()
         // Insertion order descending; the action guard targets the instruction after v8.a.
-        mutableContent.addInstructions(actionIndex + 1, ":c21_after_action")
+        mutableContent.addInstructions(actionIndex + 1, ":c21_after_action\nnop")
         mutableContent.addInstructions(actionIndex, "if-eqz v8, :c21_after_action")
-        mutableContent.addInstructions(contentIndices.single() + 1, ":c21_after_divider")
+        mutableContent.addInstructions(contentIndices.single() + 1, ":c21_after_divider\nnop")
         mutableContent.addInstructions(dividerIndex, """
             iget-object v8, v0, Lcom/x/ui/common/m2;->c:Landroidx/compose/runtime/internal/g;
             if-eqz v8, :c21_after_divider
@@ -590,6 +591,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(mutableCleanup.implementation?.registerCount == 3)
         mutableCleanup.addInstructions(0, cleanupEntryLog())
 
-        debugNavHaze("Phase C2.2 experimental Haze and B6.2 diagnostics installed.")
+        debugNavHaze("Phase C2.3 experimental Haze and B6.2 diagnostics installed.")
     }
 }
