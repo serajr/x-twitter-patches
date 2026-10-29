@@ -1,7 +1,7 @@
-
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.removeInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.Opcode
@@ -141,10 +141,60 @@ private fun safeDrawLog(tag: String): String = """
     invoke-static {v3, v4}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 """.trimIndent()
 
+// REA C2 blueprint adapted to Dalvik register formats. Experimental: device validation required.
+private fun c21PersistentEffect(): String = """
+    if-eqz p7, :c21_skip
+    if-nez v19, :c21_skip
+    const v20, 0x83c6020
+    move/from16 v8, v20
+    invoke-virtual {v15, v8}, Landroidx/compose/runtime/o0;->j0(I)V
+    move/from16 v21, p7
+    move-object/from16 v22, v2
+    const/16 v23, 0x0
+    move/from16 v24, v25
+    const/high16 v25, 0x42600000
+    sub-float v24, v24, v25
+    const/16 v25, 0x0
+    new-instance v20, Lcom/x/ui/common/m2;
+    invoke-direct/range {v20 .. v25}, Lcom/x/ui/common/m2;-><init>(ZLdev/chrisbanes/haze/x0;Landroidx/compose/runtime/internal/g;FLandroidx/compose/runtime/internal/g;)V
+    sget-object v9, Landroidx/compose/ui/q;->a:Landroidx/compose/ui/q;
+    const/high16 v7, 0x3f800000
+    invoke-static {v9, v7}, Landroidx/compose/foundation/layout/l3;->g(Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;
+    move-result-object v9
+    sget-object v7, Landroidx/compose/foundation/layout/w;->a:Landroidx/compose/foundation/layout/w;
+    sget-object v11, Landroidx/compose/ui/b;->i:Landroidx/compose/ui/i;
+    invoke-virtual {v7, v9, v11}, Landroidx/compose/foundation/layout/w;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/d;)Landroidx/compose/ui/Modifier;
+    move-result-object v9
+    const v7, 0x3f666666
+    invoke-static {v9, v7}, Landroidx/compose/ui/a;->e(Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;
+    move-result-object v9
+    move-object/from16 v19, v15
+    const v10, 0x83c6021
+    move-object/from16 v8, v20
+    invoke-static {v10, v8, v19}, Landroidx/compose/runtime/internal/h;->e(ILkotlin/Function;Landroidx/compose/runtime/Composer;)Landroidx/compose/runtime/internal/g;
+    move-result-object v10
+    sget-object v12, Landroidx/compose/foundation/layout/c0;->a:Landroidx/compose/foundation/layout/c0;
+    const/4 v13, 0x1
+    move-object v14, v9
+    sget-object v15, Landroidx/compose/animation/y1;->b:Landroidx/compose/animation/y1;
+    sget-object v16, Landroidx/compose/animation/z1;->b:Landroidx/compose/animation/z1;
+    const/16 v17, 0x0
+    move-object/from16 v18, v10
+    const v20, 0x180006
+    const/16 v21, 0x10
+    invoke-static/range {v12 .. v21}, Landroidx/compose/animation/p;->h(Landroidx/compose/foundation/layout/b0;ZLandroidx/compose/ui/Modifier;Landroidx/compose/animation/y1;Landroidx/compose/animation/z1;Ljava/lang/String;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;II)V
+    move-object/from16 v15, v19
+    const/4 v20, 0x0
+    move/from16 v8, v20
+    invoke-virtual {v15, v8}, Landroidx/compose/runtime/o0;->u(Z)V
+    :c21_skip
+    nop
+""".trimIndent()
+
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Phase B6.2 diagnostics: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension.",
+    description = "Phase C2.4-B real persistent Haze experiment: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -281,21 +331,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
             ?: error("FixNavigationBarHaze: mutable m2.invoke() not found.")
 
         require(mutableContent.implementation?.registerCount == 22)
-        // C2.4-A: self-contained, behavior-neutral branch experiment.
-        // All labels and their branch instruction are compiled together.
-        // v0/v1 are dead at entry and immediately reinitialized by stock m2.invoke().
-        // No HazeEffect or Compose changes in this validation-only build.
-        mutableContent.addInstructions(
-            0,
-            """
-            move-object/from16 v0, p0
-            iget-object v1, v0, Lcom/x/ui/common/m2;->c:Landroidx/compose/runtime/internal/g;
-            if-eqz v1, :c24a_no_content
-            nop
-            :c24a_no_content
-            nop
-            """.trimIndent()
-        )
         mutableContent.addInstructions(
             0,
             "invoke-static {}, ${EXTENSION_CLASS}->onBottomBarContentComposed()V"
@@ -327,6 +362,79 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "invoke-static {v${returnInstruction.registerA}}, " +
                 "${EXTENSION_CLASS}->onBottomBarSizeChanged(I)V"
         )
+
+
+        // C2.4-B: replace each stock invoke with a complete, self-contained
+        // guarded invoke. Never branch to a label compiled by another call.
+        fun refOf(instruction: com.android.tools.smali.dexlib2.iface.instruction.Instruction): String? =
+            (instruction as? ReferenceInstruction)?.reference?.toString()
+
+        val m2Code = mutableContent.implementation!!.instructions.toList()
+        val dividerCalls = m2Code.indices.filter {
+            refOf(m2Code[it]) ==
+                "Landroidx/compose/material3/z;->f(FIIJLandroidx/compose/runtime/Composer;Landroidx/compose/ui/Modifier;)V"
+        }
+        val contentCalls = m2Code.indices.filter {
+            refOf(m2Code[it]) ==
+                "Landroidx/compose/runtime/internal/g;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        }
+        val actionCalls = m2Code.indices.filter {
+            refOf(m2Code[it]) ==
+                "Landroidx/compose/material3/v8;->a(Landroidx/compose/ui/Modifier;JJLandroidx/compose/foundation/layout/j2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V"
+        }
+        require(dividerCalls.size == 1 && contentCalls.size == 1 && actionCalls.size == 1) {
+            "C2.4-B: unexpected m2 call counts divider=${dividerCalls.size} " +
+                "content=${contentCalls.size} action=${actionCalls.size}"
+        }
+        // Process descending so the original indices remain valid.
+        val guardedInvokes = listOf(
+            actionCalls.single() to """
+                if-eqz v8, :c24b_action_done
+                invoke-static/range {v2 .. v10}, Landroidx/compose/material3/v8;->a(Landroidx/compose/ui/Modifier;JJLandroidx/compose/foundation/layout/j2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V
+                :c24b_action_done
+                nop
+            """.trimIndent(),
+            contentCalls.single() to """
+                if-eqz v3, :c24b_content_done
+                invoke-virtual {v3, v7, v2}, Landroidx/compose/runtime/internal/g;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+                :c24b_content_done
+                nop
+            """.trimIndent(),
+            dividerCalls.single() to """
+                iget-object v8, v0, Lcom/x/ui/common/m2;->c:Landroidx/compose/runtime/internal/g;
+                if-eqz v8, :c24b_divider_done
+                const/4 v8, 0x0
+                invoke-static/range {v2 .. v8}, Landroidx/compose/material3/z;->f(FIIJLandroidx/compose/runtime/Composer;Landroidx/compose/ui/Modifier;)V
+                :c24b_divider_done
+                const/4 v8, 0x0
+            """.trimIndent()
+        )
+        for ((index, snippet) in guardedInvokes.sortedByDescending { it.first }) {
+            mutableContent.removeInstruction(index)
+            mutableContent.addInstructions(index, snippet)
+        }
+
+        val p2Code = mutableTarget.implementation!!.instructions.toList()
+        val insetAnchors = p2Code.indices.filter { i ->
+            p2Code[i].opcode == Opcode.MOVE_FROM16 &&
+                (p2Code[i] as? com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction)
+                    ?.let { it.registerA == 16 && it.registerB == 4 } == true
+        }
+        val sourceAnchors = p2Code.indices.filter {
+            refOf(p2Code[it]) ==
+                "Lcom/x/ui/common/k2;->a(Lcom/x/ui/common/o2;Landroidx/compose/runtime/internal/g;Landroidx/compose/runtime/Composer;I)V"
+        }
+        require(insetAnchors.size == 1 && sourceAnchors.size == 1 &&
+            insetAnchors.single() < sourceAnchors.single()) {
+            "C2.4-B: p2 inset/source structural anchors not found"
+        }
+        val sourceIndex = sourceAnchors.single()
+        require(p2Code[sourceIndex + 1].opcode == Opcode.INVOKE_VIRTUAL &&
+            refOf(p2Code[sourceIndex + 1]) == "Landroidx/compose/runtime/o0;->u(Z)V") {
+            "C2.4-B: expected outer Box close after k2.a"
+        }
+        mutableTarget.addInstructions(sourceIndex + 1, c21PersistentEffect())
+        mutableTarget.addInstructions(insetAnchors.single() + 1, "move/from16 v25, v16")
 
         // PHASE B2 — GEOMETRY DIAGNOSTICS
 
@@ -492,6 +600,6 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(mutableCleanup.implementation?.registerCount == 3)
         mutableCleanup.addInstructions(0, cleanupEntryLog())
 
-        debugNavHaze("Phase C2.4-A validation-only branch installed.")
+        debugNavHaze("Phase C2.4-B experimental persistent Haze installed.")
     }
 }
