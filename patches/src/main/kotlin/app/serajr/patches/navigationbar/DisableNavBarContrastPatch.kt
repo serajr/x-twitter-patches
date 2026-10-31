@@ -1,4 +1,3 @@
-
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
@@ -12,38 +11,43 @@ import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 @Suppress("unused")
 val disableNavBarContrastPatch = bytecodePatch(
     name = "Disable Navigation Bar Contrast",
-    description = "Disables Android's automatic navigation bar contrast scrim.",
+    description = "Disables automatic navigation bar contrast in AndroidX and X.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
 
     execute {
-        val targets = setOf(
-            "Landroidx/activity/x;",
-            "Landroidx/activity/z;"
+        val targets = mapOf(
+            "Landroidx/activity/x;" to "b",
+            "Landroidx/activity/z;" to "b",
+            "Lcom/x/ui/common/ports/z;" to "d"
         )
 
         val methods = mutableListOf<Method>()
 
         classDefForEach { classDef ->
-            if (classDef.type.toString() in targets) {
-                methods += classDef.methods.filter { method ->
-                    method.name == "b" &&
-                        method.returnType == "V" &&
-                        method.parameterTypes.map { it.toString() } == listOf(
+            val name = targets[classDef.type.toString()] ?: return@classDefForEach
+
+            methods += classDef.methods.filter { method ->
+                method.name == name &&
+                    method.returnType == "V" &&
+                    method.parameterTypes.map { it.toString() } ==
+                    if (name == "d") {
+                        listOf("Landroid/view/Window;")
+                    } else {
+                        listOf(
                             "Landroidx/activity/m0;",
                             "Landroidx/activity/m0;",
                             "Landroid/view/Window;",
                             "Landroid/view/View;",
-                            "Z",
-                            "Z"
+                            "Z", "Z"
                         )
-                }
+                    }
             }
         }
 
-        require(methods.size == 2) {
-            "DisableNavBarContrast: expected two AndroidX methods."
+        require(methods.size == 3) {
+            "DisableNavBarContrast: expected three target methods."
         }
 
         methods.forEach { original ->
@@ -63,10 +67,9 @@ val disableNavBarContrastPatch = bytecodePatch(
 
             val index = matches.single()
             val call = instructions[index] as FiveRegisterInstruction
-            val windowRegister = call.registerC
             val booleanRegister = call.registerD
 
-            require(windowRegister != booleanRegister)
+            require(booleanRegister <= 15)
 
             method.addInstructions(
                 index + 1,
