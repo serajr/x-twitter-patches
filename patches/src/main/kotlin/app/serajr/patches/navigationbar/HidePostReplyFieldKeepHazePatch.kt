@@ -6,15 +6,21 @@ import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
 
 private const val REPLY_COMPOSER_CLASS =
     "Lcom/x/composer/minimal/b;"
 
-private const val BACKGROUND_COLOR_FIELD =
-    "Lcom/x/compose/theme/e;->r:J"
-
-private const val BACKGROUND_MODIFIER =
+private const val OUTER_SURFACE =
     "Landroidx/compose/foundation/p;->l("
+
+private const val INNER_CLICKABLE =
+    "Landroidx/compose/foundation/e0;->c("
+
+private const val HAZE_MODIFIER =
+    "Lcom/x/compose/core/m0;->e("
 
 private val RENDER_CALLS = listOf(
     "Lcom/x/ui/common/user/z;->l(",
@@ -27,7 +33,7 @@ private val RENDER_CALLS = listOf(
 @Suppress("unused")
 val hidePostReplyBarKeepHazePatch = bytecodePatch(
     name = "Hide Post Reply Bar (Keep Haze)",
-    description = "Hides post reply controls and their background while preserving the original navigation bar Haze.",
+    description = "Hides post reply controls, surface and touch modifier while preserving Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -52,14 +58,14 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         val original = requireNotNull(targetMethod) {
-            "HidePostReplyBarKeepHaze: reply composer method not found."
+            "D3-D: reply composer method not found."
         }
 
         val method = mutableClassDefBy(original.definingClass)
             .methods.first { it.toString() == original.toString() }
 
         val implementation = requireNotNull(method.implementation) {
-            "HidePostReplyBarKeepHaze: method has no implementation."
+            "D3-D: method has no implementation."
         }
 
         val instructions = implementation.instructions.toList()
@@ -68,7 +74,16 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             (instructions[index] as? ReferenceInstruction)
                 ?.reference?.toString()
 
-        // D3-B: Suppress only the six rendering calls.
+        fun matchingInvokes(prefix: String): List<Int> =
+            instructions.indices.filter { index ->
+                val opcode = instructions[index].opcode
+
+                (opcode == Opcode.INVOKE_STATIC ||
+                    opcode == Opcode.INVOKE_STATIC_RANGE) &&
+                    referenceAt(index)?.startsWith(prefix) == true
+            }
+
+        // Preserve the six successful D3-B removals.
         val renderIndices = instructions.indices.filter { index ->
             val opcode = instructions[index].opcode
 
@@ -93,51 +108,92 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
             require(actual == expected) {
-                "HidePostReplyBarKeepHaze: expected $expected " +
-                    "render calls for $prefix, found $actual."
+                "D3-D: expected $expected calls for $prefix, found $actual."
             }
         }
 
         require(renderIndices.size == 6) {
-            "HidePostReplyBarKeepHaze: unexpected render call count."
+            "D3-D: unexpected renderer call count."
         }
 
-        // D3-C: Locate the theme color feeding the rounded
-        // background modifier. Do not remove the modifier.
-        val backgroundIndices = instructions.indices.filter { index ->
-            if (instructions[index].opcode != Opcode.IGET_WIDE ||
-                referenceAt(index) != BACKGROUND_COLOR_FIELD
-            ) {
-                return@filter false
+        // Verify the original Haze hook is still present.
+        require(matchingInvokes(HAZE_MODIFIER).size == 1) {
+            "D3-D: expected exactly one Haze modifier."
+        }
+
+        // Remove only the outer visual modifier.
+        // The original v2 Modifier remains available.
+        val outerCandidates = matchingInvokes(OUTER_SURFACE)
+            .filter { index ->
+                val call = instructions[index] as? FiveRegisterInstruction
+                val result = instructions.getOrNull(index + 1)
+                    as? OneRegisterInstruction
+
+                call != null &&
+                    call.registerC == 2 &&
+                    call.registerD == 3 &&
+                    call.registerE == 4 &&
+                    call.registerF == 5 &&
+                    call.registerG == 11 &&
+                    instructions.getOrNull(index + 1)
+                        ?.opcode == Opcode.MOVE_RESULT_OBJECT &&
+                    result?.registerA == 2
             }
 
-            val next = index + 1
-            val following = index + 2
-
-            next < instructions.size &&
-                following < instructions.size &&
-                instructions[next].opcode == Opcode.INVOKE_STATIC &&
-                referenceAt(next)?.startsWith(BACKGROUND_MODIFIER) == true &&
-                instructions[following].opcode == Opcode.MOVE_RESULT_OBJECT
+        require(outerCandidates.size == 1) {
+            "D3-D: expected one outer surface, " +
+                "found ${outerCandidates.size}."
         }
 
-        require(backgroundIndices.size == 1) {
-            "HidePostReplyBarKeepHaze: expected one background color site, " +
-                "found ${backgroundIndices.size}."
+        val outerIndex = outerCandidates.single()
+
+        // Remove only the inner clickable modifier.
+        // Pass its incoming v16 Modifier directly to v6.
+        val clickableCandidates = matchingInvokes(INNER_CLICKABLE)
+            .filter { index ->
+                val call = instructions[index] as? RegisterRangeInstruction
+                val result = instructions.getOrNull(index + 1)
+                    as? OneRegisterInstruction
+
+                call?.startRegister == 16 &&
+                    call.registerCount == 7 &&
+                    instructions.getOrNull(index + 1)
+                        ?.opcode == Opcode.MOVE_RESULT_OBJECT &&
+                    result?.registerA == 6
+            }
+
+        require(clickableCandidates.size == 1) {
+            "D3-D: expected one inner clickable, " +
+                "found ${clickableCandidates.size}."
         }
 
-        // Apply modifications in descending order to avoid
-        // shifting instruction indices.
-        val replacements = (
-            renderIndices.map { it to "nop" } +
-                listOf(
-                    backgroundIndices.single() to
-                        "const-wide/16 v4, 0x0"
-                )
-            ).sortedByDescending { it.first }
+        val clickableIndex = clickableCandidates.single()
 
-        replacements.forEach { (index, smali) ->
-            method.replaceInstruction(index, smali)
+        val replacements = mutableListOf<Pair<Int, String>>()
+
+        renderIndices.forEach { index ->
+            replacements += index to "nop"
         }
+
+        // Keep the incoming v2 Modifier instead of the
+        // rounded surface modifier.
+        replacements += outerIndex to "nop"
+        replacements += (outerIndex + 1) to "nop"
+
+        // Keep the incoming v16 Modifier instead of the
+        // clickable modifier.
+        replacements += clickableIndex to "nop"
+        replacements += (clickableIndex + 1) to
+            "move-object/from16 v6, v16"
+
+        require(replacements.map { it.first }.distinct().size ==
+            replacements.size) {
+            "D3-D: overlapping replacement indices."
+        }
+
+        replacements.sortedByDescending { it.first }
+            .forEach { (index, smali) ->
+                method.replaceInstruction(index, smali)
+            }
     }
 }
