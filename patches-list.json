@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.63.0",
+  "version": "1.64.0-dev.1",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -127,7 +127,7 @@
     },
     {
       "name": "Hide Post Reply Bar (Keep Haze)",
-      "description": "Hides post reply controls and removes the container clip and interaction while preserving Haze.",
+      "description": "Hides post reply controls and interaction while experimentally disabling the reply Haze tint.",
       "default": false,
       "category": null,
       "dependencies": [],
