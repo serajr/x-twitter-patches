@@ -7,6 +7,7 @@ import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
@@ -82,11 +83,11 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         val replySource = requireNotNull(replyOriginal) {
-            "D3-F1: reply composer method not found."
+            "D3-F1.1: reply composer method not found."
         }
 
         val callbackSource = requireNotNull(callbackOriginal) {
-            "D3-F1: reply Haze callback not found."
+            "D3-F1.1: reply callback method not found."
         }
 
         val replyMethod = mutableClassDefBy(replySource.definingClass)
@@ -97,23 +98,23 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
 
         val replyInstructions =
             requireNotNull(replyMethod.implementation) {
-                "D3-F1: reply method has no implementation."
+                "D3-F1.1: reply method has no implementation."
             }.instructions.toList()
 
         val callbackInstructions =
             requireNotNull(callbackMethod.implementation) {
-                "D3-F1: callback has no implementation."
+                "D3-F1.1: callback method has no implementation."
             }.instructions.toList()
 
         fun referenceAt(
-            instructions: List<com.android.tools.smali.dexlib2.iface.instruction.Instruction>,
+            instructions: List<Instruction>,
             index: Int
         ): String? =
             (instructions[index] as? ReferenceInstruction)
                 ?.reference?.toString()
 
         fun matchingInvokes(
-            instructions: List<com.android.tools.smali.dexlib2.iface.instruction.Instruction>,
+            instructions: List<Instruction>,
             prefix: String
         ): List<Int> =
             instructions.indices.filter { index ->
@@ -126,7 +127,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         // --------------------------------------------------
-        // D3-D: Remove the six reply controls.
+        // D3-D: Hide all six reply controls.
         // --------------------------------------------------
 
         val renderIndices = replyInstructions.indices.filter { index ->
@@ -155,26 +156,19 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
             require(actual == expected) {
-                "D3-F1: expected $expected calls for " +
+                "D3-F1.1: expected $expected calls for " +
                     "$prefix, found $actual."
             }
         }
 
         require(renderIndices.size == 6) {
-            "D3-F1: unexpected renderer call count."
+            "D3-F1.1: unexpected renderer call count."
         }
 
-        // --------------------------------------------------
-        // D3-D: Preserve the original Haze modifier.
-        // --------------------------------------------------
-
-        val hazeIndices = matchingInvokes(
-            replyInstructions,
-            HAZE_MODIFIER
-        )
-
-        require(hazeIndices.size == 1) {
-            "D3-F1: expected exactly one Haze modifier."
+        require(
+            matchingInvokes(replyInstructions, HAZE_MODIFIER).size == 1
+        ) {
+            "D3-F1.1: expected exactly one Haze modifier."
         }
 
         // --------------------------------------------------
@@ -204,7 +198,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         require(outerCandidates.size == 1) {
-            "D3-F1: expected one outer surface, " +
+            "D3-F1.1: expected one outer surface, " +
                 "found ${outerCandidates.size}."
         }
 
@@ -233,29 +227,26 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         require(clickableCandidates.size == 1) {
-            "D3-F1: expected one inner clickable, " +
+            "D3-F1.1: expected one inner clickable, " +
                 "found ${clickableCandidates.size}."
         }
 
         val clickableIndex = clickableCandidates.single()
 
         // --------------------------------------------------
-        // D3-F1: Identify the callback constructor used
-        // exclusively by this reply composer.
+        // D3-F1.1: Locate the Reply Bar callback instance.
         // --------------------------------------------------
 
         val callbackConstructors =
             replyInstructions.indices.filter { index ->
-                val instruction = replyInstructions[index]
-
-                instruction.opcode == Opcode.INVOKE_DIRECT &&
+                replyInstructions[index].opcode ==
+                    Opcode.INVOKE_DIRECT &&
                     referenceAt(replyInstructions, index)
-                        ?.startsWith(CALLBACK_CONSTRUCTOR) == true &&
-                    index < hazeIndices.single()
+                        ?.startsWith(CALLBACK_CONSTRUCTOR) == true
             }
 
         require(callbackConstructors.size == 1) {
-            "D3-F1: expected one reply callback constructor, " +
+            "D3-F1.1: expected one callback constructor, " +
                 "found ${callbackConstructors.size}."
         }
 
@@ -271,7 +262,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
                 constructor.registerD == 12 &&
                 constructor.registerE == 9
         ) {
-            "D3-F1: unexpected callback constructor registers."
+            "D3-F1.1: unexpected callback constructor registers."
         }
 
         val discriminatorIndex = constructorIndex - 1
@@ -279,66 +270,18 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         val discriminatorInstruction =
             replyInstructions[discriminatorIndex]
 
-        val discriminatorRegister =
-            discriminatorInstruction as? OneRegisterInstruction
-
-        val discriminatorLiteral =
-            discriminatorInstruction as? WideLiteralInstruction
-
         require(
             discriminatorInstruction.opcode == Opcode.CONST_4 &&
-                discriminatorRegister?.registerA == 9 &&
-                discriminatorLiteral?.wideLiteral == 0L
+                (discriminatorInstruction as?
+                    OneRegisterInstruction)?.registerA == 9 &&
+                (discriminatorInstruction as?
+                    WideLiteralInstruction)?.wideLiteral == 0L
         ) {
-            "D3-F1: expected const/4 v9, 0x0 before constructor."
+            "D3-F1.1: unexpected callback discriminator."
         }
 
         // --------------------------------------------------
-        // D3-F1: Validate the existing callback structure.
-        // --------------------------------------------------
-
-        val callbackColorCalls =
-            callbackInstructions.indices.filter { index ->
-                callbackInstructions[index].opcode ==
-                    Opcode.INVOKE_INTERFACE &&
-                    referenceAt(callbackInstructions, index)
-                        ?.startsWith(CALLBACK_COLOR) == true
-            }
-
-        require(callbackColorCalls.size == 2) {
-            "D3-F1: expected two original callback color calls, " +
-                "found ${callbackColorCalls.size}."
-        }
-
-        val callbackReturns =
-            callbackInstructions.indices.filter { index ->
-                callbackInstructions[index].opcode ==
-                    Opcode.RETURN_OBJECT
-            }
-
-        require(callbackReturns.size == 2) {
-            "D3-F1: expected two callback return paths."
-        }
-
-        // The original method uses .registers 4:
-        //
-        // v0, v1, p0, p1
-        //
-        // The added instructions reuse v0 and v1.
-        //
-        // No register count change is necessary.
-
-        val callbackRegisterCount =
-            requireNotNull(callbackMethod.implementation)
-                .registerCount
-
-        require(callbackRegisterCount == 4) {
-            "D3-F1: unexpected callback register count."
-        }
-
-        // --------------------------------------------------
-        // Apply the D3-D changes plus the D3-F1
-        // callback discriminator change.
+        // Apply D3-D plus the discriminator change.
         // --------------------------------------------------
 
         val replacements = mutableListOf<Pair<Int, String>>()
@@ -354,7 +297,6 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         replacements += (clickableIndex + 1) to
             "move-object/from16 v6, v16"
 
-        // D3-F1: Mark only this callback instance.
         replacements += discriminatorIndex to
             "const/4 v9, 0x2"
 
@@ -362,7 +304,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             replacements.map { it.first }.distinct().size ==
                 replacements.size
         ) {
-            "D3-F1: overlapping reply replacements."
+            "D3-F1.1: overlapping reply replacements."
         }
 
         replacements.sortedByDescending { it.first }
@@ -371,50 +313,70 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         // --------------------------------------------------
-        // D3-F1: Extend the callback with a dedicated
-        // discriminator-2 path.
+        // D3-F1.1: Modify only the default callback path.
         //
-        // Preserve all existing paths unchanged.
+        // The original packed-switch remains untouched.
+        // The original color callback remains untouched.
         // --------------------------------------------------
 
-        val callbackInsertIndex = callbackInstructions.indexOfFirst {
-            it.opcode == Opcode.IGET_BYTE
+        val colorCalls = callbackInstructions.indices.filter { index ->
+            callbackInstructions[index].opcode ==
+                Opcode.INVOKE_INTERFACE &&
+                referenceAt(callbackInstructions, index)
+                    ?.startsWith(CALLBACK_COLOR) == true
         }
 
-        require(callbackInsertIndex >= 0) {
-            "D3-F1: callback discriminator read not found."
+        require(colorCalls.size == 2) {
+            "D3-F1.1: expected two color callback calls."
         }
 
-        // The original discriminator is read into v0.
-        // For value 2, run the original graphics callback,
-        // then clear the Haze color-effect list.
+        val firstColorCall = colorCalls.first()
+
+        val originalReturnIndex = firstColorCall + 1
+
+        require(
+            callbackInstructions.getOrNull(originalReturnIndex)
+                ?.opcode == Opcode.RETURN_OBJECT
+        ) {
+            "D3-F1.1: expected return after default color callback."
+        }
+
+        val registerCount =
+            requireNotNull(callbackMethod.implementation)
+                .registerCount
+
+        require(registerCount == 4) {
+            "D3-F1.1: unexpected callback register count."
+        }
+
+        // At this point:
         //
-        // For every other value, execution falls through
-        // to the original packed-switch.
+        // v0 = original discriminator
+        // v1 = Kotlin Unit
+        // p0 = captured graphics object
+        // p1 = Haze configuration interface
+        //
+        // The default branch handles discriminator 2.
+        //
+        // The additional conditional ensures that any other
+        // default discriminator retains its original behavior.
 
         callbackMethod.addInstructions(
-            callbackInsertIndex + 1,
+            originalReturnIndex,
             """
+                const/4 v0, 0x2
+                iget-byte v0, p0, Lcom/x/composer/minimal/s0;->a:B
                 const/4 v1, 0x2
-                if-ne v0, v1, :d3f1_original
-
-                iget-object v0, p0, Lcom/x/composer/minimal/s0;->b:Landroidx/compose/ui/graphics/u0;
-
-                check-cast p1, Ldev/chrisbanes/haze/blur/m;
-
-                invoke-interface {p1, v0}, Ldev/chrisbanes/haze/blur/m;->c(Landroidx/compose/ui/graphics/v;)V
+                if-ne v0, v1, :d3f11_return
 
                 invoke-static {}, Lkotlin/collections/CollectionsKt;->emptyList()Ljava/util/List;
-
                 move-result-object v0
 
                 invoke-interface {p1, v0}, Ldev/chrisbanes/haze/blur/m;->h(Ljava/util/List;)V
 
-                sget-object v0, Lkotlin/Unit;->a:Lkotlin/Unit;
+                sget-object v1, Lkotlin/Unit;->a:Lkotlin/Unit;
 
-                return-object v0
-
-                :d3f1_original
+                :d3f11_return
                 nop
             """.trimIndent()
         )
