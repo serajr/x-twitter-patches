@@ -1,3 +1,5 @@
+## [1.59.0](https://github.com/serajr/x-twitter-patches/compare/v1.58.0...v1.59.0) (2026-11-01)
+
 ## [1.59.0-dev.1](https://github.com/serajr/x-twitter-patches/compare/v1.58.0...v1.59.0-dev.1) (2026-11-01)
 
 ## [1.58.0](https://github.com/serajr/x-twitter-patches/compare/v1.57.0...v1.58.0) (2026-10-31)
