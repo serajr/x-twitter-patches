@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.59.0",
+  "version": "1.60.0-dev.1",
   "patches": [
     {
       "name": "Desativar Blur do X",
@@ -126,8 +126,8 @@
       "options": []
     },
     {
-      "name": "Hide Post Reply Field (Keep Haze)",
-      "description": "Hides the post reply text field while preserving its surrounding Compose container and navigation bar Haze.",
+      "name": "Hide Post Reply Bar (Keep Haze)",
+      "description": "Hides post reply controls while preserving the original Haze container.",
       "default": false,
       "category": null,
       "dependencies": [],
