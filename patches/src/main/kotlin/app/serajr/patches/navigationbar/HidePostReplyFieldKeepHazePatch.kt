@@ -22,6 +22,9 @@ private const val INNER_CLICKABLE =
 private const val HAZE_MODIFIER =
     "Lcom/x/compose/core/m0;->e("
 
+private const val CLIP_MODIFIER =
+    "Landroidx/compose/ui/draw/j;->c("
+
 private val RENDER_CALLS = listOf(
     "Lcom/x/ui/common/user/z;->l(",
     "Lcom/x/composer/minimal/b;->d(",
@@ -33,7 +36,7 @@ private val RENDER_CALLS = listOf(
 @Suppress("unused")
 val hidePostReplyBarKeepHazePatch = bytecodePatch(
     name = "Hide Post Reply Bar (Keep Haze)",
-    description = "Hides post reply controls, surface and touch modifier while preserving Haze.",
+    description = "Hides post reply controls and removes the container clip and interaction while preserving Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -58,14 +61,14 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         val original = requireNotNull(targetMethod) {
-            "D3-D: reply composer method not found."
+            "D3-E: reply composer method not found."
         }
 
         val method = mutableClassDefBy(original.definingClass)
             .methods.first { it.toString() == original.toString() }
 
         val implementation = requireNotNull(method.implementation) {
-            "D3-D: method has no implementation."
+            "D3-E: method has no implementation."
         }
 
         val instructions = implementation.instructions.toList()
@@ -83,7 +86,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
                     referenceAt(index)?.startsWith(prefix) == true
             }
 
-        // Preserve the six successful D3-B removals.
+        // D3-B: Preserve all six renderer removals.
         val renderIndices = instructions.indices.filter { index ->
             val opcode = instructions[index].opcode
 
@@ -108,21 +111,22 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
             require(actual == expected) {
-                "D3-D: expected $expected calls for $prefix, found $actual."
+                "D3-E: expected $expected calls for $prefix, found $actual."
             }
         }
 
         require(renderIndices.size == 6) {
-            "D3-D: unexpected renderer call count."
+            "D3-E: unexpected renderer call count."
         }
 
-        // Verify the original Haze hook is still present.
-        require(matchingInvokes(HAZE_MODIFIER).size == 1) {
-            "D3-D: expected exactly one Haze modifier."
+        // Verify that the original Haze call is present.
+        val hazeIndices = matchingInvokes(HAZE_MODIFIER)
+
+        require(hazeIndices.size == 1) {
+            "D3-E: expected exactly one Haze modifier."
         }
 
-        // Remove only the outer visual modifier.
-        // The original v2 Modifier remains available.
+        // D3-D: Remove the outer surface modifier.
         val outerCandidates = matchingInvokes(OUTER_SURFACE)
             .filter { index ->
                 val call = instructions[index] as? FiveRegisterInstruction
@@ -141,14 +145,13 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         require(outerCandidates.size == 1) {
-            "D3-D: expected one outer surface, " +
+            "D3-E: expected one outer surface, " +
                 "found ${outerCandidates.size}."
         }
 
         val outerIndex = outerCandidates.single()
 
-        // Remove only the inner clickable modifier.
-        // Pass its incoming v16 Modifier directly to v6.
+        // D3-D: Remove the clickable modifier.
         val clickableCandidates = matchingInvokes(INNER_CLICKABLE)
             .filter { index ->
                 val call = instructions[index] as? RegisterRangeInstruction
@@ -163,11 +166,45 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         require(clickableCandidates.size == 1) {
-            "D3-D: expected one inner clickable, " +
+            "D3-E: expected one inner clickable, " +
                 "found ${clickableCandidates.size}."
         }
 
         val clickableIndex = clickableCandidates.single()
+
+        // D3-E: Locate the clip immediately preceding Haze.
+        //
+        // Original:
+        // invoke-static {v1, v11}, draw/j;->c(...)
+        // move-result-object v16
+        //
+        // Replacement:
+        // nop
+        // move-object/from16 v16, v1
+        //
+        // This preserves the incoming Modifier without
+        // the clip and keeps the subsequent Haze call.
+        val clipCandidates = matchingInvokes(CLIP_MODIFIER)
+            .filter { index ->
+                val call = instructions[index] as? FiveRegisterInstruction
+                val result = instructions.getOrNull(index + 1)
+                    as? OneRegisterInstruction
+
+                call != null &&
+                    call.registerC == 1 &&
+                    call.registerD == 11 &&
+                    instructions.getOrNull(index + 1)
+                        ?.opcode == Opcode.MOVE_RESULT_OBJECT &&
+                    result?.registerA == 16 &&
+                    index < hazeIndices.single()
+            }
+
+        require(clipCandidates.size == 1) {
+            "D3-E: expected one clip before Haze, " +
+                "found ${clipCandidates.size}."
+        }
+
+        val clipIndex = clipCandidates.single()
 
         val replacements = mutableListOf<Pair<Int, String>>()
 
@@ -175,20 +212,26 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             replacements += index to "nop"
         }
 
-        // Keep the incoming v2 Modifier instead of the
-        // rounded surface modifier.
+        // D3-D: Preserve the original outer Modifier.
         replacements += outerIndex to "nop"
         replacements += (outerIndex + 1) to "nop"
 
-        // Keep the incoming v16 Modifier instead of the
-        // clickable modifier.
+        // D3-D: Preserve the original clickable input
+        // Modifier, removing the touch interaction.
         replacements += clickableIndex to "nop"
         replacements += (clickableIndex + 1) to
             "move-object/from16 v6, v16"
 
-        require(replacements.map { it.first }.distinct().size ==
-            replacements.size) {
-            "D3-D: overlapping replacement indices."
+        // D3-E: Remove only the rounded clip.
+        replacements += clipIndex to "nop"
+        replacements += (clipIndex + 1) to
+            "move-object/from16 v16, v1"
+
+        require(
+            replacements.map { it.first }.distinct().size ==
+                replacements.size
+        ) {
+            "D3-E: overlapping replacement indices."
         }
 
         replacements.sortedByDescending { it.first }
