@@ -1,88 +1,109 @@
 package app.serajr.patches.navigationbar
 
-import app.morphe.patcher.extensions.InstructionExtensions.removeInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.serajr.patches.Constants
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 
-private const val REPLY_FIELD_TAG =
-    "post-detail-reply-text-field"
+private const val REPLY_COMPOSER_CLASS =
+    "Lcom/x/composer/minimal/b;"
 
-private const val TEXT_FIELD_RENDERER =
-    "Landroidx/compose/foundation/text/d0;->b("
+private val RENDER_CALLS = listOf(
+    "Lcom/x/ui/common/user/z;->l(",
+    "Lcom/x/composer/minimal/b;->d(",
+    "Landroidx/compose/animation/g;->i(",
+    "Landroidx/compose/material3/x;->h(",
+    "Landroidx/compose/animation/g;->h("
+)
 
 @Suppress("unused")
-val hidePostReplyFieldKeepHazePatch = bytecodePatch(
-    name = "Hide Post Reply Field (Keep Haze)",
-    description = "Hides the post reply text field while preserving its surrounding Compose container and navigation bar Haze.",
+val hidePostReplyBarKeepHazePatch = bytecodePatch(
+    name = "Hide Post Reply Bar (Keep Haze)",
+    description = "Hides post reply controls while preserving the original Haze container.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
 
     execute {
-        val candidates = mutableListOf<Method>()
+        var targetMethod: Method? = null
 
         classDefForEach { classDef ->
-            classDef.methods.forEach { method ->
-                if (method.name != "invoke" ||
-                    method.returnType != "Ljava/lang/Object;" ||
-                    method.parameterTypes.size != 2
-                ) {
-                    return@forEach
-                }
+            if (classDef.type != REPLY_COMPOSER_CLASS) {
+                return@classDefForEach
+            }
 
-                val instructions = method.implementation
-                    ?.instructions
-                    ?.toList()
-                    ?: return@forEach
-
-                val hasReplyTag = instructions.any { instruction ->
-                    instruction.opcode == Opcode.CONST_STRING &&
-                        (instruction as? ReferenceInstruction)
-                            ?.reference?.toString() == REPLY_FIELD_TAG
-                }
-
-                val hasTextRenderer = instructions.any { instruction ->
-                    instruction.opcode == Opcode.INVOKE_STATIC_RANGE &&
-                        (instruction as? ReferenceInstruction)
-                            ?.reference?.toString()
-                            ?.startsWith(TEXT_FIELD_RENDERER) == true
-                }
-
-                if (hasReplyTag && hasTextRenderer) {
-                    candidates.add(method)
-                }
+            targetMethod = classDef.methods.firstOrNull { method ->
+                method.name == "e" &&
+                    method.returnType == "V" &&
+                    method.parameterTypes.size == 23 &&
+                    method.parameterTypes.firstOrNull()
+                        ?.toString() == "Ldev/chrisbanes/haze/a1;" &&
+                    method.parameterTypes.getOrNull(20)
+                        ?.toString() == "Landroidx/compose/runtime/Composer;"
             }
         }
 
-        require(candidates.size == 1) {
-            "HidePostReplyFieldKeepHaze: expected exactly one reply field renderer, found ${candidates.size}."
+        val original = requireNotNull(targetMethod) {
+            "HidePostReplyBarKeepHaze: reply composer method not found."
         }
-
-        val original = candidates.single()
 
         val method = mutableClassDefBy(original.definingClass)
             .methods.first { it.toString() == original.toString() }
 
-        val instructions = requireNotNull(method.implementation) {
-            "HidePostReplyFieldKeepHaze: method has no implementation."
-        }.instructions.toList()
+        val implementation = requireNotNull(method.implementation) {
+            "HidePostReplyBarKeepHaze: method has no implementation."
+        }
 
-        val rendererIndices = instructions.indices.filter { index ->
+        val instructions = implementation.instructions.toList()
+
+        val matches = instructions.indices.filter { index ->
             val instruction = instructions[index]
 
-            instruction.opcode == Opcode.INVOKE_STATIC_RANGE &&
-                (instruction as? ReferenceInstruction)
-                    ?.reference?.toString()
-                    ?.startsWith(TEXT_FIELD_RENDERER) == true
+            if (
+                instruction.opcode != Opcode.INVOKE_STATIC &&
+                instruction.opcode != Opcode.INVOKE_STATIC_RANGE
+            ) {
+                return@filter false
+            }
+
+            val reference = (
+                instruction as? ReferenceInstruction
+            )?.reference?.toString() ?: return@filter false
+
+            RENDER_CALLS.any { reference.startsWith(it) }
         }
 
-        require(rendererIndices.size == 1) {
-            "HidePostReplyFieldKeepHaze: expected exactly one text field invocation."
+        val expectedCounts = mapOf(
+            "Lcom/x/ui/common/user/z;->l(" to 1,
+            "Lcom/x/composer/minimal/b;->d(" to 1,
+            "Landroidx/compose/animation/g;->i(" to 2,
+            "Landroidx/compose/material3/x;->h(" to 1,
+            "Landroidx/compose/animation/g;->h(" to 1
+        )
+
+        expectedCounts.forEach { (prefix, expected) ->
+            val actual = matches.count { index ->
+                val reference = (
+                    instructions[index] as ReferenceInstruction
+                ).reference.toString()
+
+                reference.startsWith(prefix)
+            }
+
+            require(actual == expected) {
+                "HidePostReplyBarKeepHaze: expected $expected " +
+                    "calls for $prefix, found $actual."
+            }
         }
 
-        method.removeInstruction(rendererIndices.single())
+        require(matches.size == 6) {
+            "HidePostReplyBarKeepHaze: unexpected render call count."
+        }
+
+        matches.sortedDescending().forEach { index ->
+            method.replaceInstruction(index, "nop")
+        }
     }
 }
