@@ -127,7 +127,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         // --------------------------------------------------
-        // D3-D: Hide all six reply controls.
+        // D3-D: Hide the six reply controls.
         // --------------------------------------------------
 
         val renderIndices = replyInstructions.indices.filter { index ->
@@ -234,7 +234,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         val clickableIndex = clickableCandidates.single()
 
         // --------------------------------------------------
-        // D3-F1.1: Locate the Reply Bar callback instance.
+        // D3-F1.1: Locate the Reply Bar callback constructor.
         // --------------------------------------------------
 
         val callbackConstructors =
@@ -281,7 +281,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         // --------------------------------------------------
-        // Apply D3-D plus the discriminator change.
+        // Apply D3-D plus discriminator 2.
         // --------------------------------------------------
 
         val replacements = mutableListOf<Pair<Int, String>>()
@@ -313,10 +313,15 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             }
 
         // --------------------------------------------------
-        // D3-F1.1: Modify only the default callback path.
+        // D3-F1.1: Preserve the original packed-switch.
         //
-        // The original packed-switch remains untouched.
-        // The original color callback remains untouched.
+        // Insert the tint override immediately before
+        // the default branch's original return-object.
+        //
+        // v0 = discriminator
+        // v1 = Kotlin Unit
+        // p0 = captured graphics object
+        // p1 = Haze configuration interface
         // --------------------------------------------------
 
         val colorCalls = callbackInstructions.indices.filter { index ->
@@ -327,7 +332,7 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         }
 
         require(colorCalls.size == 2) {
-            "D3-F1.1: expected two color callback calls."
+            "D3-F1.1: expected two original color callback calls."
         }
 
         val firstColorCall = colorCalls.first()
@@ -338,46 +343,47 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
             callbackInstructions.getOrNull(originalReturnIndex)
                 ?.opcode == Opcode.RETURN_OBJECT
         ) {
-            "D3-F1.1: expected return after default color callback."
+            "D3-F1.1: expected default return after color callback."
         }
 
-        val registerCount =
+        val callbackRegisterCount =
             requireNotNull(callbackMethod.implementation)
                 .registerCount
 
-        require(registerCount == 4) {
+        require(callbackRegisterCount == 4) {
             "D3-F1.1: unexpected callback register count."
         }
 
-        // At this point:
+        // Important:
         //
-        // v0 = original discriminator
-        // v1 = Kotlin Unit
-        // p0 = captured graphics object
-        // p1 = Haze configuration interface
+        // The callback's packed-switch already consumed v0
+        // without modifying it. On the default path, v0
+        // still holds the original discriminator.
         //
-        // The default branch handles discriminator 2.
+        // Discriminator 2:
+        //   Keep the original graphics callback.
+        //   Clear the Haze color-effect list.
         //
-        // The additional conditional ensures that any other
-        // default discriminator retains its original behavior.
+        // All other discriminators:
+        //   Preserve the original behavior.
+        //
+        // Restore Kotlin Unit in v1 before returning.
 
         callbackMethod.addInstructions(
             originalReturnIndex,
             """
-                const/4 v0, 0x2
-                iget-byte v0, p0, Lcom/x/composer/minimal/s0;->a:B
                 const/4 v1, 0x2
+
                 if-ne v0, v1, :d3f11_return
 
                 invoke-static {}, Lkotlin/collections/CollectionsKt;->emptyList()Ljava/util/List;
+
                 move-result-object v0
 
                 invoke-interface {p1, v0}, Ldev/chrisbanes/haze/blur/m;->h(Ljava/util/List;)V
 
-                sget-object v1, Lkotlin/Unit;->a:Lkotlin/Unit;
-
                 :d3f11_return
-                nop
+                sget-object v1, Lkotlin/Unit;->a:Lkotlin/Unit;
             """.trimIndent()
         )
     }
