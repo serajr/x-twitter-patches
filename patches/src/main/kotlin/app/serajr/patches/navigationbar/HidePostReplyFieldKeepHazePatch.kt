@@ -10,6 +10,12 @@ import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 private const val REPLY_COMPOSER_CLASS =
     "Lcom/x/composer/minimal/b;"
 
+private const val BACKGROUND_COLOR_FIELD =
+    "Lcom/x/compose/theme/e;->r:J"
+
+private const val BACKGROUND_MODIFIER =
+    "Landroidx/compose/foundation/p;->l("
+
 private val RENDER_CALLS = listOf(
     "Lcom/x/ui/common/user/z;->l(",
     "Lcom/x/composer/minimal/b;->d(",
@@ -21,7 +27,7 @@ private val RENDER_CALLS = listOf(
 @Suppress("unused")
 val hidePostReplyBarKeepHazePatch = bytecodePatch(
     name = "Hide Post Reply Bar (Keep Haze)",
-    description = "Hides post reply controls while preserving the original Haze container.",
+    description = "Hides post reply controls and their background while preserving the original navigation bar Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -58,21 +64,19 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
 
         val instructions = implementation.instructions.toList()
 
-        val matches = instructions.indices.filter { index ->
-            val instruction = instructions[index]
+        fun referenceAt(index: Int): String? =
+            (instructions[index] as? ReferenceInstruction)
+                ?.reference?.toString()
 
-            if (
-                instruction.opcode != Opcode.INVOKE_STATIC &&
-                instruction.opcode != Opcode.INVOKE_STATIC_RANGE
-            ) {
-                return@filter false
-            }
+        // D3-B: Suppress only the six rendering calls.
+        val renderIndices = instructions.indices.filter { index ->
+            val opcode = instructions[index].opcode
 
-            val reference = (
-                instruction as? ReferenceInstruction
-            )?.reference?.toString() ?: return@filter false
-
-            RENDER_CALLS.any { reference.startsWith(it) }
+            (opcode == Opcode.INVOKE_STATIC ||
+                opcode == Opcode.INVOKE_STATIC_RANGE) &&
+                RENDER_CALLS.any { prefix ->
+                    referenceAt(index)?.startsWith(prefix) == true
+                }
         }
 
         val expectedCounts = mapOf(
@@ -84,26 +88,56 @@ val hidePostReplyBarKeepHazePatch = bytecodePatch(
         )
 
         expectedCounts.forEach { (prefix, expected) ->
-            val actual = matches.count { index ->
-                val reference = (
-                    instructions[index] as ReferenceInstruction
-                ).reference.toString()
-
-                reference.startsWith(prefix)
+            val actual = renderIndices.count { index ->
+                referenceAt(index)?.startsWith(prefix) == true
             }
 
             require(actual == expected) {
                 "HidePostReplyBarKeepHaze: expected $expected " +
-                    "calls for $prefix, found $actual."
+                    "render calls for $prefix, found $actual."
             }
         }
 
-        require(matches.size == 6) {
+        require(renderIndices.size == 6) {
             "HidePostReplyBarKeepHaze: unexpected render call count."
         }
 
-        matches.sortedDescending().forEach { index ->
-            method.replaceInstruction(index, "nop")
+        // D3-C: Locate the theme color feeding the rounded
+        // background modifier. Do not remove the modifier.
+        val backgroundIndices = instructions.indices.filter { index ->
+            if (instructions[index].opcode != Opcode.IGET_WIDE ||
+                referenceAt(index) != BACKGROUND_COLOR_FIELD
+            ) {
+                return@filter false
+            }
+
+            val next = index + 1
+            val following = index + 2
+
+            next < instructions.size &&
+                following < instructions.size &&
+                instructions[next].opcode == Opcode.INVOKE_STATIC &&
+                referenceAt(next)?.startsWith(BACKGROUND_MODIFIER) == true &&
+                instructions[following].opcode == Opcode.MOVE_RESULT_OBJECT
+        }
+
+        require(backgroundIndices.size == 1) {
+            "HidePostReplyBarKeepHaze: expected one background color site, " +
+                "found ${backgroundIndices.size}."
+        }
+
+        // Apply modifications in descending order to avoid
+        // shifting instruction indices.
+        val replacements = (
+            renderIndices.map { it to "nop" } +
+                listOf(
+                    backgroundIndices.single() to
+                        "const-wide/16 v4, 0x0"
+                )
+            ).sortedByDescending { it.first }
+
+        replacements.forEach { (index, smali) ->
+            method.replaceInstruction(index, smali)
         }
     }
 }
