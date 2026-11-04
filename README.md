@@ -7,7 +7,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.69.0](https://github.com/serajr/x-twitter-patches/releases/tag/v1.69.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;7 patches total
+> **[v1.70.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.70.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;7 patches total
 <details open>
 <summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;7 patches</summary>
 <br>
@@ -20,7 +20,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 | 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
 |----------|----------------|-----------|
 | [Desativar Blur do X](#desativar-blur-do-x) | Desativa permanentemente os efeitos de desfoque da Haze no X 12.30+. |  |
-| [Disable Navigation Bar Contrast](#disable-navigation-bar-contrast) | Disables navigation bar contrast directly in X's main activity. |  |
+| [Disable Navigation Bar Contrast](#disable-navigation-bar-contrast) | Disables system navigation bar contrast while preserving X's native Haze effect (Blur/Scrim). |  |
 | [Fix Navigation Bar Haze](#fix-navigation-bar-haze) | Phase C2.4-C m2 guard isolation: B5.1 baseline plus read-only GraphicsLayer inspection through the navigation extension. |  |
 | [Hide Post Reply Bar (Keep Haze)](#hide-post-reply-bar-keep-haze) | Hides the post reply bar while preserving the native navigation bar Haze effect (Blur/Scrim). |  |
 | [Keep Bottom Bar Visible](#keep-bottom-bar-visible) | Keeps the bottom navigation bar visible while scrolling the timeline. |  |
