@@ -7,7 +7,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.71.0](https://github.com/serajr/x-twitter-patches/releases/tag/v1.71.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
+> **[v1.72.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.72.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
 <details open>
 <summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
@@ -26,7 +26,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 | [Keep Bottom Bar Visible](#keep-bottom-bar-visible) | Keeps the bottom navigation bar visible while scrolling the timeline. |  |
 | [Manter Barra Inferior Visível](#manter-barra-inferior-vis-vel) | Mantém a barra inferior do X visível durante a rolagem da timeline. |  |
 | [Preservar contraste da Barra de Navegação](#preservar-contraste-da-barra-de-navega-o) | Mantém permanentemente a proteção visual da barra de navegação sem alterar o edge-to-edge. |  |
-| [Remove Post Reply Container (Experimental)](#remove-post-reply-container-experimental) | Tests structural removal of the post reply content while preserving the parent layout and native Haze. |  |
+| [Remove Post Reply Container (Experimental)](#remove-post-reply-container-experimental) | Removes the post reply content and tests a 64.dp minimum Haze container height. |  |
 
 </details>
 
