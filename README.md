@@ -7,7 +7,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.72.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.72.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
+> **[v1.72.0](https://github.com/serajr/x-twitter-patches/releases/tag/v1.72.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;8 patches total
 <details open>
 <summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;8 patches</summary>
 <br>
