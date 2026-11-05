@@ -7,9 +7,9 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
-> **[v1.73.0](https://github.com/serajr/x-twitter-patches/releases/tag/v1.73.0)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;9 patches total
+> **[v1.74.0-dev.1](https://github.com/serajr/x-twitter-patches/releases/tag/v1.74.0-dev.1)**&nbsp;&nbsp;•&nbsp;&nbsp;`dev`&nbsp;&nbsp;•&nbsp;&nbsp;10 patches total
 <details open>
-<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;9 patches</summary>
+<summary>📦 X (Twitter)&nbsp;&nbsp;•&nbsp;&nbsp;10 patches</summary>
 <br>
 
 **🎯 Supported versions:**
@@ -28,6 +28,7 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 | [Preservar contraste da Barra de Navegação](#preservar-contraste-da-barra-de-navega-o) | Mantém permanentemente a proteção visual da barra de navegação sem alterar o edge-to-edge. |  |
 | [Remove Post Reply Container (Experimental)](#remove-post-reply-container-experimental) | Removes the post reply content and tests a 64.dp minimum Haze container height. |  |
 | [Remove Post Reply Content (Keep Layout) - Experimental](#remove-post-reply-content-keep-layout-experimental) | Removes the inner post reply composer while preserving its parent Compose layout and native Haze configuration. |  |
+| [Shorten Bottom Haze Gradient - Experimental](#shorten-bottom-haze-gradient-experimental) | Shortens the native bottom Haze mask gradient while preserving the original blur rendering and Compose layout. |  |
 
 </details>
 
