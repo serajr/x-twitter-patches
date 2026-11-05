@@ -11,7 +11,7 @@ private const val HAZE_GRADIENT_CLASS =
     "Lcom/x/composer/minimal/n0;"
 
 private const val ORIGINAL_DIVISOR_BITS = 0x40000000 // 2.0f
-private const val SHORTENED_DIVISOR_BITS = 0x40400000 // 3.0f
+private const val SHORTENED_DIVISOR_BITS = 0x40800000 // 4.0f
 
 @Suppress("unused")
 val shortenBottomHazeGradientPatch = bytecodePatch(
@@ -77,7 +77,7 @@ val shortenBottomHazeGradientPatch = bytecodePatch(
         // No additional registers or control-flow changes.
         method.replaceInstruction(
             matches.single(),
-            "const/high16 p0, 0x40400000"
+            "const/high16 p0, 0x40800000"
         )
     }
 }
