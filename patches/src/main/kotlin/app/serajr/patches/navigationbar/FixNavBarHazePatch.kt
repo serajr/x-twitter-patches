@@ -9,25 +9,29 @@ import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 
 /**
- * D3-K1A.8B — half-width magenta navigation-inset diagnostic.
+ * D3-K1A.9A — native Haze on a full-width diagnostic Spacer.
  *
  * X 12.40.1-prod.01 only.
  *
- * Preserves the D3-K1A.5 root HazeState and source wrapper.
+ * Preserves the D3-K1A.5 root HazeState and hazeSource wrapper.
  * Preserves the original navigation-inset Spacer and pointerInput.
  *
- * Adds a second, non-interactive Spacer inside the root Box:
+ * Adds a second Spacer inside the root Box:
  * - BottomStart alignment
- * - 50% width
+ * - 100% width
  * - navigationBars window insets
- * - opaque magenta background
+ * - native X Haze effect
  *
- * The right half receives no additional background.
+ * Uses the same native Haze effect parameters investigated
+ * in D3-K1A.7A, now on the independently validated
+ * diagnostic Spacer from D3-K1A.8B.
  *
- * This is a diagnostic patch, not a Haze fix.
+ * Does not modify Android navigation bar contrast.
+ * Does not modify the original X Bottom Bar animation.
  *
- * No extension, new class, register allocation, or .locals change.
- * Do not combine with the obsolete C2.4 diagnostic patch.
+ * Experimental diagnostic, not yet a validated Haze fix.
+ *
+ * No extension, new class, register allocation or .locals change.
  */
 
 private const val MAIN_ACTIVITY =
@@ -39,14 +43,14 @@ private const val SOURCE_WRAPPER =
 private const val HAZE_STATE_HELPER =
     "Lcom/x/ui/common/post/b;"
 
-private const val BACKGROUND_HELPER =
-    "Landroidx/compose/foundation/p;"
+private const val HAZE_EFFECT_HELPER =
+    "Lcom/x/compose/core/o0;"
 
-private const val BACKGROUND_BRUSH_OWNER =
-    "Landroidx/compose/ui/graphics/m0;"
+private const val HAZE_STYLE_HELPER =
+    "Lcom/x/compose/core/m0;"
 
-private const val BACKGROUND_BRUSH_CLASS =
-    "Landroidx/compose/ui/graphics/h1;"
+private const val HAZE_TINT_CLASS =
+    "Ldev/chrisbanes/haze/blur/g0;"
 
 private const val ALIGNMENT_OWNER =
     "Landroidx/compose/ui/b;"
@@ -99,11 +103,14 @@ private const val STATE_FACTORY =
 private const val SOURCE_MODIFIER =
     "${HAZE_STATE_HELPER}->e(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;FI)Landroidx/compose/ui/Modifier;"
 
-private const val BACKGROUND_FACTORY =
-    "${BACKGROUND_HELPER}->j(Landroidx/compose/ui/Modifier;J${BACKGROUND_BRUSH_CLASS})Landroidx/compose/ui/Modifier;"
+private const val TINT_FACTORY =
+    "${HAZE_STYLE_HELPER}->c(Landroidx/compose/runtime/Composer;)${HAZE_TINT_CLASS}"
 
-private const val BACKGROUND_BRUSH =
-    "${BACKGROUND_BRUSH_OWNER}->b:Landroidx/compose/ui/graphics/b1;"
+private const val TINT_FIELD =
+    "${HAZE_TINT_CLASS}->a:J"
+
+private const val EFFECT_FACTORY =
+    "${HAZE_EFFECT_HELPER}->e(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;JJFLandroidx/compose/runtime/Composer;II)Landroidx/compose/ui/Modifier;"
 
 private const val LAMBDA_FACTORY =
     "Landroidx/compose/runtime/internal/h;->e(ILkotlin/Function;Landroidx/compose/runtime/Composer;)Landroidx/compose/runtime/internal/g;"
@@ -118,7 +125,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.8B diagnostic: half-width magenta overlay on the root navigation inset, preserving the original Spacer.",
+    description = "D3-K1A.9A diagnostic: native Haze on a full-width navigation-inset overlay while preserving the original Spacer.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -128,8 +135,9 @@ val fixNavigationBarHazePatch = bytecodePatch(
 
         var wrapperVerified = false
         var stateVerified = false
-        var backgroundVerified = false
-        var brushVerified = false
+        var effectVerified = false
+        var tintVerified = false
+        var tintFieldVerified = false
         var alignmentVerified = false
         var boxScopeVerified = false
         var modifierVerified = false
@@ -183,22 +191,35 @@ val fixNavigationBarHazePatch = bytecodePatch(
                     }
                 }
 
-                BACKGROUND_HELPER -> {
-                    backgroundVerified = classDef.methods.any { method ->
-                        method.name == "j" &&
+                HAZE_EFFECT_HELPER -> {
+                    effectVerified = classDef.methods.any { method ->
+                        method.name == "e" &&
                             method.returnType == "Landroidx/compose/ui/Modifier;" &&
                             method.parameterTypes.map { it.toString() } == listOf(
                                 "Landroidx/compose/ui/Modifier;",
+                                "Ldev/chrisbanes/haze/a1;",
                                 "J",
-                                BACKGROUND_BRUSH_CLASS
+                                "J",
+                                "F",
+                                "Landroidx/compose/runtime/Composer;",
+                                "I",
+                                "I"
                             )
                     }
                 }
 
-                BACKGROUND_BRUSH_OWNER -> {
-                    brushVerified = classDef.fields.any { field ->
-                        field.name == "b" &&
-                            field.type == "Landroidx/compose/ui/graphics/b1;"
+                HAZE_STYLE_HELPER -> {
+                    tintVerified = classDef.methods.any { method ->
+                        method.name == "c" &&
+                            method.returnType == HAZE_TINT_CLASS &&
+                            method.parameterTypes.map { it.toString() } ==
+                                listOf("Landroidx/compose/runtime/Composer;")
+                    }
+                }
+
+                HAZE_TINT_CLASS -> {
+                    tintFieldVerified = classDef.fields.any { field ->
+                        field.name == "a" && field.type == "J"
                     }
                 }
 
@@ -283,8 +304,9 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(
             wrapperVerified &&
                 stateVerified &&
-                backgroundVerified &&
-                brushVerified &&
+                effectVerified &&
+                tintVerified &&
+                tintFieldVerified &&
                 alignmentVerified &&
                 boxScopeVerified &&
                 modifierVerified &&
@@ -292,7 +314,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 insetsVerified &&
                 spacerVerified
         ) {
-            "FixNavigationBarHaze: D3-K1A.8B native helpers do not match X 12.40.1."
+            "FixNavigationBarHaze: D3-K1A.9A native helpers do not match X 12.40.1."
         }
 
         val root = originalRoot
@@ -376,37 +398,35 @@ val fixNavigationBarHazePatch = bytecodePatch(
         }
 
         /*
-         * Confirm the immediate closing operation of the root Box.
-         *
-         * The diagnostic Spacer must be inserted after the
-         * original Spacer and before this closing operation.
+         * Confirm that the original Spacer is immediately followed
+         * by the root Box closing operation.
          */
-        val nextInstruction = instructions.getOrNull(spacerIndex + 1)
-            ?: error("FixNavigationBarHaze: missing root Box closing instruction.")
-
         require(
             root.refAt(spacerIndex + 1) ==
-                "Landroidx/compose/runtime/o0;->u(Z)V" &&
-                (nextInstruction as? FiveRegisterInstruction)
-                    ?.let { it.registerCount == 2 &&
-                        it.registerC == 4 &&
-                        it.registerD == 9 } == true
+                "Landroidx/compose/runtime/o0;->u(Z)V"
         ) {
             "FixNavigationBarHaze: unexpected root Box closing structure."
         }
 
         /*
-         * D3-K1A.8B — half-width magenta diagnostic Spacer.
+         * D3-K1A.9A — native Haze diagnostic Spacer.
          *
-         * Inserted immediately after the original Spacer.
+         * Insert after the original navigation-inset Spacer.
          *
-         * v4 = Composer (preserved)
-         * v9 = true, used to close the Box (preserved)
-         * v8 = HazeState (preserved)
+         * v4 = original Composer, restored after the effect call.
+         * v8 = shared HazeState, consumed by the effect call.
+         * v9 = restored to true for root Box closure.
          *
-         * No pointerInput is added to the diagnostic Spacer.
+         * The native Haze factory receives:
+         * v0    diagnostic Spacer Modifier
+         * v1    shared HazeState
+         * v2/3  native XDS tint color
+         * v4/5  transparent effect background
+         * v6    32f blur radius
+         * v7    Composer
+         * v8/9  Compose flags
          *
-         * The original Spacer receives no modifications.
+         * The original Spacer and pointerInput are untouched.
          */
 
         mutableRoot.addInstructions(
@@ -421,7 +441,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-virtual {v2, v0, v1}, $BOX_ALIGN
                 move-result-object v0
 
-                const/high16 v1, 0x3f000000
+                const/high16 v1, 0x3f800000
 
                 invoke-static {v0, v1}, $FILL_WIDTH
                 move-result-object v0
@@ -434,12 +454,29 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-static {v0, v3}, $INSETS_PADDING
                 move-result-object v0
 
-                const-wide v6, 0xffff00ff00000000L
+                move-object v1, v8
 
-                sget-object v5, $BACKGROUND_BRUSH
+                move-object v7, v4
 
-                invoke-static {v0, v6, v7, v5}, $BACKGROUND_FACTORY
+                invoke-static {v7}, $TINT_FACTORY
+                move-result-object v3
+
+                iget-wide v2, v3, $TINT_FIELD
+
+                const-wide/16 v4, 0x0
+
+                const/high16 v6, 0x42000000
+
+                const/4 v8, 0x6
+
+                const/16 v9, 0xc0
+
+                invoke-static/range {v0 .. v9}, $EFFECT_FACTORY
                 move-result-object p3
+
+                move-object v4, v7
+
+                const/4 v9, 0x1
 
                 invoke-static {v4, p3}, $SPACER_CALL
             """.trimIndent()
@@ -448,8 +485,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         /*
          * Original D3-K1A.5 source wrapper.
          *
-         * Kept unchanged to preserve HazeState identity,
-         * source capture and Compose behavior.
+         * Preserves the shared HazeState and root hazeSource.
          */
 
         mutableRoot.removeInstruction(contentIndex)
