@@ -9,32 +9,39 @@ import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 
 /**
- * D3-K1A.7A — experimental transparent-background root navigation Haze.
+ * D3-K1A.8A — magenta navigation-inset Spacer geometry probe.
  *
  * X 12.40.1-prod.01 only.
  *
  * Preserves the D3-K1A.5 root HazeState and source wrapper.
- * Replaces only the root navigation-inset Spacer effect builder:
- * o0.d -> o0.e, with Color.Transparent (0x0) background.
+ * Temporarily replaces the navigation-inset Spacer hazeEffect
+ * with an opaque magenta Compose background.
  *
- * Preserved: native tint @0.75, blur radius 32f, noise 0.05f,
- * alpha 1.0f, null mask/progressive, and stock Bottom Bar behavior.
+ * Purpose: determine whether the root Spacer is visible inside
+ * the Android three-button navigation region.
  *
- * No extension, new class, register allocation, or .locals modification.
+ * This is a diagnostic patch, not a Haze fix.
+ *
+ * No extension, new class, register allocation, or .locals change.
  * Do not combine with the obsolete C2.4 diagnostic patch.
  */
 private const val MAIN_ACTIVITY =
     "Lcom/x/android/main/MainActivity;"
+
 private const val SOURCE_WRAPPER =
     "Lcom/x/compose/theme/j;"
+
 private const val HAZE_STATE_HELPER =
     "Lcom/x/ui/common/post/b;"
-private const val HAZE_EFFECT_HELPER =
-    "Lcom/x/compose/core/o0;"
-private const val HAZE_STYLE_HELPER =
-    "Lcom/x/compose/core/m0;"
-private const val HAZE_TINT_CLASS =
-    "Ldev/chrisbanes/haze/blur/g0;"
+
+private const val BACKGROUND_HELPER =
+    "Landroidx/compose/foundation/p;"
+
+private const val BACKGROUND_BRUSH_OWNER =
+    "Landroidx/compose/ui/graphics/m0;"
+
+private const val BACKGROUND_BRUSH_CLASS =
+    "Landroidx/compose/ui/graphics/h1;"
 
 private const val CONTENT_INVOKE =
     "Landroidx/compose/runtime/internal/g;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
@@ -54,17 +61,14 @@ private const val NAV_HANDLER =
 private const val STATE_FACTORY =
     "${HAZE_STATE_HELPER}->f(Landroidx/compose/runtime/Composer;)Ldev/chrisbanes/haze/a1;"
 
-private const val TINT_FACTORY =
-    "${HAZE_STYLE_HELPER}->c(Landroidx/compose/runtime/Composer;)${HAZE_TINT_CLASS}"
-
-private const val TINT_FIELD =
-    "${HAZE_TINT_CLASS}->a:J"
-
-private const val EFFECT_FACTORY =
-    "${HAZE_EFFECT_HELPER}->e(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;JJFLandroidx/compose/runtime/Composer;II)Landroidx/compose/ui/Modifier;"
-
 private const val SOURCE_MODIFIER =
     "${HAZE_STATE_HELPER}->e(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;FI)Landroidx/compose/ui/Modifier;"
+
+private const val BACKGROUND_FACTORY =
+    "${BACKGROUND_HELPER}->j(Landroidx/compose/ui/Modifier;J${BACKGROUND_BRUSH_CLASS})Landroidx/compose/ui/Modifier;"
+
+private const val BACKGROUND_BRUSH =
+    "${BACKGROUND_BRUSH_OWNER}->b:Landroidx/compose/ui/graphics/b1;"
 
 private const val LAMBDA_FACTORY =
     "Landroidx/compose/runtime/internal/h;->e(ILkotlin/Function;Landroidx/compose/runtime/Composer;)Landroidx/compose/runtime/internal/g;"
@@ -79,7 +83,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "Experimental persistent native Haze behind the Android navigation bar with a transparent effect background.",
+    description = "D3-K1A.8A diagnostic: opaque magenta root navigation-inset Spacer to verify system navigation bar geometry.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -88,9 +92,8 @@ val fixNavigationBarHazePatch = bytecodePatch(
         var originalRoot: Method? = null
         var wrapperVerified = false
         var stateVerified = false
-        var effectVerified = false
-        var tintVerified = false
-        var tintFieldVerified = false
+        var backgroundVerified = false
+        var brushVerified = false
 
         classDefForEach { classDef ->
             when (classDef.type.toString()) {
@@ -138,35 +141,22 @@ val fixNavigationBarHazePatch = bytecodePatch(
                     }
                 }
 
-                HAZE_EFFECT_HELPER -> {
-                    effectVerified = classDef.methods.any { method ->
-                        method.name == "e" &&
+                BACKGROUND_HELPER -> {
+                    backgroundVerified = classDef.methods.any { method ->
+                        method.name == "j" &&
                             method.returnType == "Landroidx/compose/ui/Modifier;" &&
                             method.parameterTypes.map { it.toString() } == listOf(
                                 "Landroidx/compose/ui/Modifier;",
-                                "Ldev/chrisbanes/haze/a1;",
                                 "J",
-                                "J",
-                                "F",
-                                "Landroidx/compose/runtime/Composer;",
-                                "I",
-                                "I"
+                                BACKGROUND_BRUSH_CLASS
                             )
                     }
                 }
 
-                HAZE_STYLE_HELPER -> {
-                    tintVerified = classDef.methods.any { method ->
-                        method.name == "c" &&
-                            method.returnType == HAZE_TINT_CLASS &&
-                            method.parameterTypes.map { it.toString() } ==
-                                listOf("Landroidx/compose/runtime/Composer;")
-                    }
-                }
-
-                HAZE_TINT_CLASS -> {
-                    tintFieldVerified = classDef.fields.any { field ->
-                        field.name == "a" && field.type == "J"
+                BACKGROUND_BRUSH_OWNER -> {
+                    brushVerified = classDef.fields.any { field ->
+                        field.name == "b" &&
+                            field.type == "Landroidx/compose/ui/graphics/b1;"
                     }
                 }
             }
@@ -175,11 +165,10 @@ val fixNavigationBarHazePatch = bytecodePatch(
         require(
             wrapperVerified &&
                 stateVerified &&
-                effectVerified &&
-                tintVerified &&
-                tintFieldVerified
+                backgroundVerified &&
+                brushVerified
         ) {
-            "FixNavigationBarHaze: D3-K1A.7A native helpers do not match X 12.40.1."
+            "FixNavigationBarHaze: D3-K1A.8A native helpers do not match X 12.40.1."
         }
 
         val root = originalRoot
@@ -263,22 +252,17 @@ val fixNavigationBarHazePatch = bytecodePatch(
         }
 
         /*
-         * D3-K1A.7A — background-only experiment.
+         * D3-K1A.8A — opaque magenta Spacer diagnostic.
          *
-         * Replace the D3-K1A.5 o0.d call with o0.e.
+         * Uses the native Compose background method confirmed
+         * in com/x/ui/common/s.smali on X 12.40.1.
          *
-         * Argument range:
-         * v0       Modifier
-         * v1       HazeState
-         * v2/v3    Native XDS tint J (@0.75)
-         * v4/v5    Color.Transparent J (0x0)
-         * v6       Blur radius 32f
-         * v7       Composer
-         * v8       Flags 6
-         * v9       Default mask 0xc0
+         * v0     Original Spacer Modifier
+         * v2/v3  Compose Color.Magenta, packed 64-bit value
+         * v5     Native default background shape
          *
-         * v4 (Composer) and v9 (1) must be restored.
-         * p2 must remain untouched for the restart lambda.
+         * v4 (Composer), v8 (HazeState), and v9 remain untouched.
+         * p2 remains untouched for the restart lambda.
          *
          * No new jump targets, register allocation or .locals change.
          */
@@ -286,25 +270,14 @@ val fixNavigationBarHazePatch = bytecodePatch(
         mutableRoot.addInstructions(
             spacerIndex,
             """
-                move-object v7, v4
-
-                invoke-static {v7}, $TINT_FACTORY
-                move-result-object v6
-                iget-wide v2, v6, $TINT_FIELD
-
-                move-object v1, v8
                 move-object v0, p3
 
-                const-wide/16 v4, 0x0
-                const/high16 v6, 0x42000000
-                const/4 v8, 0x6
-                const/16 v9, 0xc0
+                const-wide v2, 0xffff00ff00000000L
 
-                invoke-static/range {v0 .. v9}, $EFFECT_FACTORY
+                sget-object v5, $BACKGROUND_BRUSH
+
+                invoke-static {v0, v2, v3, v5}, $BACKGROUND_FACTORY
                 move-result-object p3
-
-                move-object v4, v7
-                const/4 v9, 0x1
             """.trimIndent()
         )
 
