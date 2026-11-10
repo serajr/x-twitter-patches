@@ -9,22 +9,27 @@ import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 
 /**
- * D3-K1A.8A — magenta navigation-inset Spacer geometry probe.
+ * D3-K1A.8B — half-width magenta navigation-inset diagnostic.
  *
  * X 12.40.1-prod.01 only.
  *
  * Preserves the D3-K1A.5 root HazeState and source wrapper.
- * Temporarily replaces the navigation-inset Spacer hazeEffect
- * with an opaque magenta Compose background.
+ * Preserves the original navigation-inset Spacer and pointerInput.
  *
- * Purpose: determine whether the root Spacer is visible inside
- * the Android three-button navigation region.
+ * Adds a second, non-interactive Spacer inside the root Box:
+ * - BottomStart alignment
+ * - 50% width
+ * - navigationBars window insets
+ * - opaque magenta background
+ *
+ * The right half receives no additional background.
  *
  * This is a diagnostic patch, not a Haze fix.
  *
  * No extension, new class, register allocation, or .locals change.
  * Do not combine with the obsolete C2.4 diagnostic patch.
  */
+
 private const val MAIN_ACTIVITY =
     "Lcom/x/android/main/MainActivity;"
 
@@ -43,14 +48,44 @@ private const val BACKGROUND_BRUSH_OWNER =
 private const val BACKGROUND_BRUSH_CLASS =
     "Landroidx/compose/ui/graphics/h1;"
 
+private const val ALIGNMENT_OWNER =
+    "Landroidx/compose/ui/b;"
+
+private const val BOTTOM_START =
+    "${ALIGNMENT_OWNER}->g:Landroidx/compose/ui/i;"
+
+private const val BOTTOM_CENTER =
+    "${ALIGNMENT_OWNER}->h:Landroidx/compose/ui/i;"
+
+private const val BOX_SCOPE =
+    "Landroidx/compose/foundation/layout/x;"
+
+private const val BOX_SCOPE_INSTANCE =
+    "${BOX_SCOPE}->a:Landroidx/compose/foundation/layout/x;"
+
+private const val BOX_ALIGN =
+    "${BOX_SCOPE}->a(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/d;)Landroidx/compose/ui/Modifier;"
+
+private const val MODIFIER_SINGLETON =
+    "Landroidx/compose/ui/q;->a:Landroidx/compose/ui/q;"
+
+private const val FILL_WIDTH =
+    "Landroidx/compose/foundation/layout/m3;->g(Landroidx/compose/ui/Modifier;F)Landroidx/compose/ui/Modifier;"
+
+private const val NAV_INSETS_FACTORY =
+    "Landroidx/compose/foundation/layout/e;->u(Landroidx/compose/runtime/Composer;)Landroidx/compose/foundation/layout/z3;"
+
+private const val NAV_INSETS_FIELD =
+    "Landroidx/compose/foundation/layout/z3;->e:Landroidx/compose/foundation/layout/c;"
+
+private const val INSETS_PADDING =
+    "Landroidx/compose/foundation/layout/e;->R(Landroidx/compose/ui/Modifier;Landroidx/compose/foundation/layout/y3;)Landroidx/compose/ui/Modifier;"
+
 private const val CONTENT_INVOKE =
     "Landroidx/compose/runtime/internal/g;->invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
 
 private const val SPACER_CALL =
     "Landroidx/compose/foundation/layout/e;->d(Landroidx/compose/runtime/Composer;Landroidx/compose/ui/Modifier;)V"
-
-private const val BOTTOM_CENTER =
-    "Landroidx/compose/ui/b;->h:Landroidx/compose/ui/i;"
 
 private const val POINTER_INPUT =
     "Landroidx/compose/ui/input/pointer/g0;->b("
@@ -83,17 +118,24 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.8A diagnostic: opaque magenta root navigation-inset Spacer to verify system navigation bar geometry.",
+    description = "D3-K1A.8B diagnostic: half-width magenta overlay on the root navigation inset, preserving the original Spacer.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
 
     execute {
         var originalRoot: Method? = null
+
         var wrapperVerified = false
         var stateVerified = false
         var backgroundVerified = false
         var brushVerified = false
+        var alignmentVerified = false
+        var boxScopeVerified = false
+        var modifierVerified = false
+        var widthVerified = false
+        var insetsVerified = false
+        var spacerVerified = false
 
         classDefForEach { classDef ->
             when (classDef.type.toString()) {
@@ -159,6 +201,82 @@ val fixNavigationBarHazePatch = bytecodePatch(
                             field.type == "Landroidx/compose/ui/graphics/b1;"
                     }
                 }
+
+                ALIGNMENT_OWNER -> {
+                    alignmentVerified = classDef.fields.any { field ->
+                        field.name == "g" &&
+                            field.type == "Landroidx/compose/ui/i;"
+                    } && classDef.fields.any { field ->
+                        field.name == "h" &&
+                            field.type == "Landroidx/compose/ui/i;"
+                    }
+                }
+
+                BOX_SCOPE -> {
+                    val singleton = classDef.fields.any { field ->
+                        field.name == "a" &&
+                            field.type == BOX_SCOPE
+                    }
+
+                    val alignMethod = classDef.methods.any { method ->
+                        method.name == "a" &&
+                            method.returnType == "Landroidx/compose/ui/Modifier;" &&
+                            method.parameterTypes.map { it.toString() } == listOf(
+                                "Landroidx/compose/ui/Modifier;",
+                                "Landroidx/compose/ui/d;"
+                            )
+                    }
+
+                    boxScopeVerified = singleton && alignMethod
+                }
+
+                "Landroidx/compose/ui/q;" -> {
+                    modifierVerified = classDef.fields.any { field ->
+                        field.name == "a" &&
+                            field.type == "Landroidx/compose/ui/q;"
+                    }
+                }
+
+                "Landroidx/compose/foundation/layout/m3;" -> {
+                    widthVerified = classDef.methods.any { method ->
+                        method.name == "g" &&
+                            method.returnType == "Landroidx/compose/ui/Modifier;" &&
+                            method.parameterTypes.map { it.toString() } == listOf(
+                                "Landroidx/compose/ui/Modifier;",
+                                "F"
+                            )
+                    }
+                }
+
+                "Landroidx/compose/foundation/layout/e;" -> {
+                    val insetFactory = classDef.methods.any { method ->
+                        method.name == "u" &&
+                            method.returnType ==
+                                "Landroidx/compose/foundation/layout/z3;" &&
+                            method.parameterTypes.map { it.toString() } ==
+                                listOf("Landroidx/compose/runtime/Composer;")
+                    }
+
+                    val insetPadding = classDef.methods.any { method ->
+                        method.name == "R" &&
+                            method.returnType == "Landroidx/compose/ui/Modifier;" &&
+                            method.parameterTypes.map { it.toString() } == listOf(
+                                "Landroidx/compose/ui/Modifier;",
+                                "Landroidx/compose/foundation/layout/y3;"
+                            )
+                    }
+
+                    spacerVerified = classDef.methods.any { method ->
+                        method.name == "d" &&
+                            method.returnType == "V" &&
+                            method.parameterTypes.map { it.toString() } == listOf(
+                                "Landroidx/compose/runtime/Composer;",
+                                "Landroidx/compose/ui/Modifier;"
+                            )
+                    }
+
+                    insetsVerified = insetFactory && insetPadding
+                }
             }
         }
 
@@ -166,9 +284,15 @@ val fixNavigationBarHazePatch = bytecodePatch(
             wrapperVerified &&
                 stateVerified &&
                 backgroundVerified &&
-                brushVerified
+                brushVerified &&
+                alignmentVerified &&
+                boxScopeVerified &&
+                modifierVerified &&
+                widthVerified &&
+                insetsVerified &&
+                spacerVerified
         ) {
-            "FixNavigationBarHaze: D3-K1A.8A native helpers do not match X 12.40.1."
+            "FixNavigationBarHaze: D3-K1A.8B native helpers do not match X 12.40.1."
         }
 
         val root = originalRoot
@@ -252,32 +376,72 @@ val fixNavigationBarHazePatch = bytecodePatch(
         }
 
         /*
-         * D3-K1A.8A — opaque magenta Spacer diagnostic.
+         * Confirm the immediate closing operation of the root Box.
          *
-         * Uses the native Compose background method confirmed
-         * in com/x/ui/common/s.smali on X 12.40.1.
+         * The diagnostic Spacer must be inserted after the
+         * original Spacer and before this closing operation.
+         */
+        val nextInstruction = instructions.getOrNull(spacerIndex + 1)
+            ?: error("FixNavigationBarHaze: missing root Box closing instruction.")
+
+        require(
+            root.refAt(spacerIndex + 1) ==
+                "Landroidx/compose/runtime/o0;->u(Z)V" &&
+                (nextInstruction as? FiveRegisterInstruction)
+                    ?.let { it.registerCount == 2 &&
+                        it.registerC == 4 &&
+                        it.registerD == 9 } == true
+        ) {
+            "FixNavigationBarHaze: unexpected root Box closing structure."
+        }
+
+        /*
+         * D3-K1A.8B — half-width magenta diagnostic Spacer.
          *
-         * v0     Original Spacer Modifier
-         * v2/v3  Compose Color.Magenta, packed 64-bit value
-         * v5     Native default background shape
+         * Inserted immediately after the original Spacer.
          *
-         * v4 (Composer), v8 (HazeState), and v9 remain untouched.
-         * p2 remains untouched for the restart lambda.
+         * v4 = Composer (preserved)
+         * v9 = true, used to close the Box (preserved)
+         * v8 = HazeState (preserved)
          *
-         * No new jump targets, register allocation or .locals change.
+         * No pointerInput is added to the diagnostic Spacer.
+         *
+         * The original Spacer receives no modifications.
          */
 
         mutableRoot.addInstructions(
-            spacerIndex,
+            spacerIndex + 1,
             """
-                move-object v0, p3
+                sget-object v0, $MODIFIER_SINGLETON
 
-                const-wide v2, 0xffff00ff00000000L
+                sget-object v1, $BOTTOM_START
+
+                sget-object v2, $BOX_SCOPE_INSTANCE
+
+                invoke-virtual {v2, v0, v1}, $BOX_ALIGN
+                move-result-object v0
+
+                const/high16 v1, 0x3f000000
+
+                invoke-static {v0, v1}, $FILL_WIDTH
+                move-result-object v0
+
+                invoke-static {v4}, $NAV_INSETS_FACTORY
+                move-result-object v3
+
+                iget-object v3, v3, $NAV_INSETS_FIELD
+
+                invoke-static {v0, v3}, $INSETS_PADDING
+                move-result-object v0
+
+                const-wide v6, 0xffff00ff00000000L
 
                 sget-object v5, $BACKGROUND_BRUSH
 
-                invoke-static {v0, v2, v3, v5}, $BACKGROUND_FACTORY
+                invoke-static {v0, v6, v7, v5}, $BACKGROUND_FACTORY
                 move-result-object p3
+
+                invoke-static {v4, p3}, $SPACER_CALL
             """.trimIndent()
         )
 
