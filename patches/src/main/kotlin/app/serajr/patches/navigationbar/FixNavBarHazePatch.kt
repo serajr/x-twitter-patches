@@ -103,7 +103,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.11-T2: temporary navigation context diagnostics for native solid Navigation Bar Haze.",
+    description = "D3-K1A.11-T4: temporary route and navigation shell diagnostics for native solid Navigation Bar Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -986,5 +986,360 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-virtual {v5, v4, p3}, $CONTENT_INVOKE
             """.trimIndent()
         )
+        
+        // ============================================================
+        // D3-K1A.11-T4 — Route and Bar Host Diagnostics
+        // ============================================================
+
+        val routeOwner = "Lcom/x/android/main/helpers/j8;"
+        val barHostOwner = "Lcom/x/main/b0;"
+
+        val routeFactoryDescriptor =
+            "${routeOwner}->a(" +
+                "Lcom/x/navigation/fp;" +
+                "Lcom/arkivanov/decompose/e;" +
+                "Lcom/x/navigation/ip;" +
+                ")Lcom/x/compose/core/s2;"
+
+        val barHostDescriptor =
+            "${barHostOwner}->h(" +
+                "ZZZ" +
+                "Lcom/x/main/api/landing/n;" +
+                "Lcom/x/navigation/wd;" +
+                "Lkotlin/jvm/functions/Function1;" +
+                "Landroidx/compose/runtime/internal/g;" +
+                "Landroidx/compose/runtime/Composer;" +
+                "I)V"
+
+        val diagRouteDescriptor =
+            "${MAIN_ACTIVITY}->serajrRoute(" +
+                "Lcom/x/navigation/fp;" +
+                "Lcom/arkivanov/decompose/e;" +
+                "Lcom/x/navigation/ip;" +
+                ")V"
+
+        val diagBarHostDescriptor =
+            "${MAIN_ACTIVITY}->serajrBarHost(" +
+                "Lcom/x/main/api/landing/n;" +
+                "Lcom/x/navigation/wd;" +
+                ")V"
+
+        val diagVersionDescriptor =
+            "${MAIN_ACTIVITY}->serajrNavVersion()V"
+
+        val lastBarField =
+            "${MAIN_ACTIVITY}->serajrNavLastBar:I"
+
+        val lastBarValidField =
+            "${MAIN_ACTIVITY}->serajrNavLastBarValid:I"
+
+        val versionLoggedField =
+            "${MAIN_ACTIVITY}->serajrNavVersionLogged:Z"
+
+        // Resolve both native diagnostic targets.
+
+        val routeCandidates =
+            mutableClassDefBy(routeOwner).methods.filter {
+                it.toString() == routeFactoryDescriptor
+            }
+
+        require(routeCandidates.size == 1) {
+            "FixNavigationBarHaze T4: expected one j8.a route factory."
+        }
+
+        val mutableRoute = routeCandidates.single()
+
+        val barHostCandidates =
+            mutableClassDefBy(barHostOwner).methods.filter {
+                it.toString() == barHostDescriptor
+            }
+
+        require(barHostCandidates.size == 1) {
+            "FixNavigationBarHaze T4: expected one b0.h bar host."
+        }
+
+        val mutableBarHost = barHostCandidates.single()
+
+        // Verify register layouts and method access.
+
+        require(
+            mutableRoute.implementation?.registerCount == 45 &&
+                (mutableRoute.accessFlags and AccessFlags.STATIC.value) == 0
+        ) {
+            "FixNavigationBarHaze T4: unexpected j8.a register layout."
+        }
+
+        require(
+            mutableBarHost.implementation?.registerCount == 33 &&
+                (mutableBarHost.accessFlags and AccessFlags.STATIC.value) != 0
+        ) {
+            "FixNavigationBarHaze T4: unexpected b0.h register layout."
+        }
+
+        val t4MethodNames = setOf(
+            "serajrRoute",
+            "serajrBarHost",
+            "serajrNavVersion"
+        )
+
+        val t4FieldNames = setOf(
+            "serajrNavLastBar",
+            "serajrNavLastBarValid",
+            "serajrNavVersionLogged"
+        )
+
+        require(mutableClass.methods.none {
+            it.name in t4MethodNames
+        }) {
+            "FixNavigationBarHaze T4: diagnostic method already exists."
+        }
+
+        require(mutableClass.fields.none {
+            it.name in t4FieldNames
+        }) {
+            "FixNavigationBarHaze T4: diagnostic field already exists."
+        }
+
+        // ------------------------------------------------------------
+        // T4 diagnostic fields
+        // ------------------------------------------------------------
+
+        addStaticField("serajrNavLastBar", "I")
+        addStaticField("serajrNavLastBarValid", "I")
+        addStaticField("serajrNavVersionLogged", "Z")
+
+        // ------------------------------------------------------------
+        // VERSION
+        //
+        // Log the diagnostic revision once per process.
+        // No Compose state access.
+        // ------------------------------------------------------------
+
+        addStaticMethod(
+            name = "serajrNavVersion",
+            parameters = emptyList(),
+            returnType = "V",
+            registers = 2,
+            body = """
+                sget-boolean v0, $versionLoggedField
+
+                if-nez v0, :version_done
+
+                const/4 v0, 0x1
+                sput-boolean v0, $versionLoggedField
+
+                const-string v0, "$DIAG_TAG"
+                const-string v1, "D3-K1A.11-T4 ACTIVE"
+
+                invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+
+                :version_done
+                return-void
+            """
+        )
+
+        // ------------------------------------------------------------
+        // BAR
+        //
+        // Identify the actual navigation shell.
+        //
+        // p0 = landing host
+        // p1 = active tab
+        //
+        // Deduplicate by host identity and tab ordinal.
+        // ------------------------------------------------------------
+
+        addStaticMethod(
+            name = "serajrBarHost",
+            parameters = listOf(
+                "Lcom/x/main/api/landing/n;",
+                "Lcom/x/navigation/wd;"
+            ),
+            returnType = "V",
+            registers = 8,
+            public = true,
+            body = """
+                invoke-static {}, $diagVersionDescriptor
+
+                if-eqz p0, :bar_done
+                if-eqz p1, :bar_done
+
+                invoke-static {p0}, Ljava/lang/System;->identityHashCode(Ljava/lang/Object;)I
+                move-result v0
+
+                invoke-virtual {p1}, Ljava/lang/Enum;->ordinal()I
+                move-result v1
+
+                add-int/lit8 v1, v1, 0x1
+                xor-int/2addr v0, v1
+
+                sget v1, $lastBarValidField
+                if-eqz v1, :bar_changed
+
+                sget v1, $lastBarField
+                if-eq v1, v0, :bar_done
+
+                :bar_changed
+
+                const/4 v1, 0x1
+                sput v1, $lastBarValidField
+
+                sput v0, $lastBarField
+
+                new-instance v1, Ljava/lang/StringBuilder;
+                invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V
+
+                const-string v2, "BAR host="
+                invoke-virtual {v1, v2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                invoke-virtual {p0}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+                move-result-object v0
+
+                invoke-virtual {v0}, Ljava/lang/Class;->getName()Ljava/lang/String;
+                move-result-object v0
+
+                invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                const-string v2, " tab="
+                invoke-virtual {v1, v2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                invoke-virtual {p1}, Ljava/lang/Enum;->ordinal()I
+                move-result v0
+
+                invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+                invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+                move-result-object v1
+
+                const-string v2, "$DIAG_TAG"
+
+                invoke-static {v2, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+
+                :bar_done
+                return-void
+            """
+        )
+
+        // ------------------------------------------------------------
+        // ROUTE
+        //
+        // Observe every native child-component creation.
+        //
+        // p0 = route configuration
+        // p1 = component context (unused)
+        // p2 = navigation host
+        //
+        // Intentionally NOT deduplicated.
+        // No route contents or identifiers are logged.
+        // ------------------------------------------------------------
+
+        addStaticMethod(
+            name = "serajrRoute",
+            parameters = listOf(
+                "Lcom/x/navigation/fp;",
+                "Lcom/arkivanov/decompose/e;",
+                "Lcom/x/navigation/ip;"
+            ),
+            returnType = "V",
+            registers = 9,
+            public = true,
+            body = """
+                invoke-static {}, $diagVersionDescriptor
+
+                if-eqz p0, :route_done
+                if-eqz p2, :route_done
+
+                new-instance v3, Ljava/lang/StringBuilder;
+                invoke-direct {v3}, Ljava/lang/StringBuilder;-><init>()V
+
+                const-string v1, "ROUTE route="
+                invoke-virtual {v3, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                invoke-virtual {p0}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+                move-result-object v0
+
+                invoke-virtual {v0}, Ljava/lang/Class;->getName()Ljava/lang/String;
+                move-result-object v0
+
+                invoke-virtual {v3, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                const-string v1, " host="
+                invoke-virtual {v3, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                invoke-virtual {p2}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+                move-result-object v0
+
+                invoke-virtual {v0}, Ljava/lang/Class;->getName()Ljava/lang/String;
+                move-result-object v0
+
+                invoke-virtual {v3, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+                invoke-virtual {v3}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+                move-result-object v3
+
+                const-string v1, "$DIAG_TAG"
+
+                invoke-static {v1, v3}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+
+                :route_done
+                return-void
+            """
+        )
+
+        // ------------------------------------------------------------
+        // Install the ROUTE probe at j8.a entry.
+        //
+        // Instance method:
+        // p1 = v42
+        // p2 = v43
+        // p3 = v44
+        //
+        // Range invocation is required.
+        // ------------------------------------------------------------
+
+        mutableRoute.addInstructions(
+            0,
+            "invoke-static/range {p1 .. p3}, $diagRouteDescriptor"
+        )
+
+        // ------------------------------------------------------------
+        // Install the BAR probe at b0.h entry.
+        //
+        // Static method:
+        // p3 = v27
+        // p4 = v28
+        //
+        // Range invocation is required.
+        // ------------------------------------------------------------
+
+        mutableBarHost.addInstructions(
+            0,
+            "invoke-static/range {p3 .. p4}, $diagBarHostDescriptor"
+        )
+
+        // ------------------------------------------------------------
+        // Install the version marker at the existing Haze hook.
+        //
+        // No registers are modified.
+        // This also identifies T4 if ROUTE/BAR are never reached.
+        // ------------------------------------------------------------
+
+        val t4HookCandidates = mutableClass.methods.filter {
+            it.toString() == HOOK_DESCRIPTOR
+        }
+
+        require(t4HookCandidates.size == 1) {
+            "FixNavigationBarHaze T4: expected one injected Haze hook."
+        }
+
+        t4HookCandidates.single().addInstructions(
+            0,
+            "invoke-static {}, $diagVersionDescriptor"
+        )
+
+        // ============================================================
+        // END D3-K1A.11-T4
+        // ============================================================
+        
     }
 }
