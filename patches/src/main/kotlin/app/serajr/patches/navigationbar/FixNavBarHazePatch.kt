@@ -116,7 +116,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.11-T5: native solid Navigation Bar Haze with reactive root navigation context.",
+    description = "D3-K1A.11-T5-R1: native solid Navigation Bar Haze with reactive root navigation context.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -994,16 +994,11 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-virtual {v7}, Ljava/lang/Integer;->intValue()I
                 move-result v7
 
-                const/4 v11, 0x0
-                const/4 v8, 0x1
-                if-ne v7, v8, :hook_check_tabs
-                const/4 v11, 0x1
-                goto :hook_context_ready
-                :hook_check_tabs
-                const/4 v8, 0x2
-                if-ne v7, v8, :hook_context_ready
-                move v11, v9
-                :hook_context_ready
+                # Root context is encoded as 0 (other), 1 (O), 2 (Tabs).
+                and-int/lit8 v11, v7, 0x1
+                ushr-int/lit8 v8, v7, 0x1
+                and-int/2addr v8, v9
+                or-int/2addr v11, v8
                 and-int/2addr v6, v11
 
                 invoke-static {v10, v11, v6}, $DIAG_HOOK
@@ -1275,7 +1270,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T5 ACTIVE"
+                const-string v1, "D3-K1A.11-T5-R1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
