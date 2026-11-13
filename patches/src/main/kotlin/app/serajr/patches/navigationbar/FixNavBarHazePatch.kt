@@ -14,6 +14,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import com.android.tools.smali.dexlib2.immutable.ImmutableField
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethod
@@ -73,6 +74,18 @@ private const val GET_FEED_DESCRIPTOR = "${MAIN_ACTIVITY}->${GET_FEED_NAME}()${M
 private const val WRITE_FEED_NAME = "serajrOnFeedActive"
 private const val WRITE_FEED_DESCRIPTOR = "${MAIN_ACTIVITY}->${WRITE_FEED_NAME}(Z)V"
 
+private const val ROOT_OBSERVER = "Lcom/x/android/main/bk1;"
+private const val ROOT_STACK_FIELD = "Lcom/x/android/main/u9;->d0:Lcom/arkivanov/decompose/value/b;"
+private const val ROOT_CONFIG_FIELD = "Lcom/arkivanov/decompose/b;->a:Ljava/lang/Object;"
+private const val ROOT_CHILD_FIELD = "${CHILD_STACK}->a:Lcom/arkivanov/decompose/b;"
+private const val ROOT_CHILDREN_FIELD = "${CHILD_STACK}->c:Lcom/arkivanov/decompose/k;"
+private const val ROOT_LANDING = "Lcom/x/navigation/xd;"
+private const val ROOT_TABS = "Lcom/x/navigation/ir;"
+private const val ROOT_STATE_FIELD = "${MAIN_ACTIVITY}->serajrRootContextState:${MUTABLE_STATE}"
+private const val GET_ROOT_CONTEXT = "${MAIN_ACTIVITY}->serajrGetRootContextState()${MUTABLE_STATE}"
+private const val PUBLISH_ROOT_CONTEXT = "${MAIN_ACTIVITY}->serajrOnRootContext(${CHILD_STACK})V"
+private const val LAST_ROOT_CLASS = "${MAIN_ACTIVITY}->serajrNavLastRootClass:Ljava/lang/Class;"
+
 // D3-K1A.11-T2: temporary diagnostics.
 private const val DIAG_TAG = "SerajrNavHaze"
 
@@ -103,7 +116,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.11-T4: temporary route and navigation shell diagnostics for native solid Navigation Bar Haze.",
+    description = "D3-K1A.11-T5: native solid Navigation Bar Haze with reactive root navigation context.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -139,6 +152,9 @@ val fixNavigationBarHazePatch = bytecodePatch(
             NAV_INSETS_FIELD,
             TAB_STACK_FIELD,
             BACKSTACK_FIELD,
+            ROOT_STACK_FIELD,
+            ROOT_CONFIG_FIELD,
+            ROOT_CHILDREN_FIELD,
             "${CHILD_STACK}->a:Lcom/arkivanov/decompose/b;",
             "Lcom/arkivanov/decompose/b;->b:Ljava/lang/Object;",
             "Lcom/x/compose/core/s2;->a:Ljava/lang/Object;",
@@ -149,6 +165,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
         val foundMethods = mutableSetOf<String>()
         val foundFields = mutableSetOf<String>()
         var wrapperVerified = false
+        val rootRouteTypes = mutableSetOf<String>()
 
         classDefForEach { classDef ->
             classDef.methods.forEach { method ->
@@ -163,6 +180,10 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 if (descriptor in requiredFields) {
                     foundFields.add(descriptor)
                 }
+            }
+
+            if (classDef.type.toString() in setOf(ROOT_LANDING, ROOT_TABS)) {
+                rootRouteTypes.add(classDef.type.toString())
             }
 
             when (classDef.type.toString()) {
@@ -277,6 +298,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
 
         require(
             wrapperVerified &&
+                rootRouteTypes.containsAll(setOf(ROOT_LANDING, ROOT_TABS)) &&
                 foundMethods.containsAll(requiredMethods) &&
                 foundFields.containsAll(requiredFields)
         ) {
@@ -431,6 +453,32 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "FixNavigationBarHaze: unexpected tab push register layout."
         }
 
+        // T5: verify the existing reactive root ChildStack read.
+        val rootObserver = mutableClassDefBy(ROOT_OBSERVER).methods.single {
+            it.name == "invoke" && it.returnType == "Ljava/lang/Object;" &&
+                it.parameterTypes.map { p -> p.toString() } ==
+                listOf("Ljava/lang/Object;", "Ljava/lang/Object;")
+        }
+        val observerImpl = rootObserver.implementation
+            ?: error("FixNavigationBarHaze T5: missing root observer implementation.")
+        val observerIns = observerImpl.instructions.toList()
+        require(observerImpl.registerCount == 26 && observerIns.size > 64)
+        require(
+            observerIns[61].opcode == Opcode.INVOKE_INTERFACE &&
+                rootObserver.refAt(61) == "Landroidx/compose/runtime/i3;->getValue()Ljava/lang/Object;" &&
+                (observerIns[61] as? FiveRegisterInstruction)?.registerC == 1 &&
+                observerIns[62].opcode == Opcode.MOVE_RESULT_OBJECT &&
+                (observerIns[62] as? OneRegisterInstruction)?.registerA == 9 &&
+                observerIns[63].opcode == Opcode.CHECK_CAST &&
+                rootObserver.refAt(63) == CHILD_STACK &&
+                (observerIns[63] as? OneRegisterInstruction)?.registerA == 9 &&
+                observerIns[64].opcode == Opcode.IGET_OBJECT &&
+                rootObserver.refAt(64) == ROOT_CHILDREN_FIELD &&
+                (observerIns[64] as? TwoRegisterInstruction)?.registerA == 9 &&
+                (observerIns[64] as? TwoRegisterInstruction)?.registerB == 9 &&
+                (0 until 61).any { rootObserver.refAt(it) == ROOT_STACK_FIELD }
+        ) { "FixNavigationBarHaze T5: unexpected root ChildStack anchor." }
+
         val injectedMethods = setOf(
             HOOK_NAME,
             GET_STATE_NAME,
@@ -441,7 +489,9 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "serajrNavHook",
             "serajrNavStack",
             "serajrNavPush",
-            "serajrNavFeed"
+            "serajrNavFeed",
+            "serajrGetRootContextState",
+            "serajrOnRootContext"
         )
 
         val injectedFields = setOf(
@@ -450,7 +500,9 @@ val fixNavigationBarHazePatch = bytecodePatch(
             "serajrNavLastStack",
             "serajrNavLastStackValid",
             "serajrNavLastHook",
-            "serajrNavLastFeed"
+            "serajrNavLastFeed",
+            "serajrRootContextState",
+            "serajrNavLastRootClass"
         )
 
         require(mutableClass.methods.none {
@@ -811,6 +863,82 @@ val fixNavigationBarHazePatch = bytecodePatch(
             diagnostic = true
         )
 
+        // T5: one atomic root context state, initialized to OTHER (0).
+        addStaticField("serajrRootContextState", MUTABLE_STATE)
+        addStaticField("serajrNavLastRootClass", "Ljava/lang/Class;")
+
+        addStaticMethod(
+            name = "serajrGetRootContextState",
+            parameters = emptyList(),
+            returnType = MUTABLE_STATE,
+            registers = 2,
+            body = """
+                sget-object v0, $ROOT_STATE_FIELD
+                if-nez v0, :root_state_ready
+                const/4 v1, 0x0
+                invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+                move-result-object v1
+                invoke-static {v1}, $MUTABLE_STATE_FACTORY
+                move-result-object v0
+                sput-object v0, $ROOT_STATE_FIELD
+                :root_state_ready
+                return-object v0
+            """
+        )
+
+        // v0 = active configuration, v1 = root context (0/1/2).
+        // Publish on every observed snapshot; deduplicate logging only.
+        addStaticMethod(
+            name = "serajrOnRootContext",
+            parameters = listOf(CHILD_STACK),
+            returnType = "V",
+            registers = 7,
+            public = true,
+            body = """
+                iget-object v0, p0, $ROOT_CHILD_FIELD
+                iget-object v0, v0, $ROOT_CONFIG_FIELD
+                const/4 v1, 0x0
+                instance-of v2, v0, $ROOT_LANDING
+                if-eqz v2, :check_tabs
+                const/4 v1, 0x1
+                goto :publish_root
+                :check_tabs
+                instance-of v2, v0, $ROOT_TABS
+                if-eqz v2, :publish_root
+                const/4 v1, 0x2
+                :publish_root
+                invoke-static {}, $GET_ROOT_CONTEXT
+                move-result-object v2
+                invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+                move-result-object v3
+                invoke-virtual {v2, v3}, $MUTABLE_STATE_SET
+
+                invoke-static {}, ${MAIN_ACTIVITY}->serajrNavVersion()V
+                if-eqz v0, :root_done
+                invoke-virtual {v0}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+                move-result-object v2
+                sget-object v3, $LAST_ROOT_CLASS
+                if-eq v2, v3, :root_done
+                sput-object v2, $LAST_ROOT_CLASS
+                invoke-virtual {v2}, Ljava/lang/Class;->getName()Ljava/lang/String;
+                move-result-object v3
+                new-instance v4, Ljava/lang/StringBuilder;
+                invoke-direct {v4}, Ljava/lang/StringBuilder;-><init>()V
+                const-string v5, "ROOT_CTX route="
+                invoke-virtual {v4, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v4, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                const-string v5, " context="
+                invoke-virtual {v4, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v4, v1}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+                invoke-virtual {v4}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+                move-result-object v4
+                const-string v5, "$DIAG_TAG"
+                invoke-static {v5, v4}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+                :root_done
+                return-void
+            """
+        )
+
         // Native Haze hook.
         // Rendering parameters remain identical to D3-K1A.11-T1.
 
@@ -858,9 +986,27 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 invoke-virtual {v9}, Ljava/lang/Boolean;->booleanValue()Z
                 move-result v9
 
-                and-int/2addr v6, v9
+                invoke-static {}, $GET_ROOT_CONTEXT
+                move-result-object v7
+                invoke-virtual {v7}, $MUTABLE_STATE_GET
+                move-result-object v7
+                check-cast v7, Ljava/lang/Integer;
+                invoke-virtual {v7}, Ljava/lang/Integer;->intValue()I
+                move-result v7
 
-                invoke-static {v10, v9, v6}, $DIAG_HOOK
+                const/4 v11, 0x0
+                const/4 v8, 0x1
+                if-ne v7, v8, :hook_check_tabs
+                const/4 v11, 0x1
+                goto :hook_context_ready
+                :hook_check_tabs
+                const/4 v8, 0x2
+                if-ne v7, v8, :hook_context_ready
+                move v11, v9
+                :hook_context_ready
+                and-int/2addr v6, v11
+
+                invoke-static {v10, v11, v6}, $DIAG_HOOK
 
                 const v7, 0x3d4ccccd
                 const/4 v8, 0x0
@@ -1129,7 +1275,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T4 ACTIVE"
+                const-string v1, "D3-K1A.11-T5 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
@@ -1338,7 +1484,14 @@ val fixNavigationBarHazePatch = bytecodePatch(
         )
 
         // ============================================================
-        // END D3-K1A.11-T4
+        // END D3-K1A.11-T4 diagnostics
+        // ============================================================
+
+        // T5: publish the active root snapshot without clobbering v9.
+        rootObserver.addInstructions(64, "invoke-static {v9}, $PUBLISH_ROOT_CONTEXT")
+
+        // ============================================================
+        // END D3-K1A.11-T5
         // ============================================================
         
     }
