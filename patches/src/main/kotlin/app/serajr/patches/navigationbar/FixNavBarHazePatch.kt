@@ -116,7 +116,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.11-T5-R1: native solid Navigation Bar Haze with reactive root navigation context.",
+    description = "D3-K1A.11-T6: native Navigation Bar Haze with scoped reactivation diagnostics.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1112,6 +1112,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
             """
                 invoke-static {v4}, $STATE_FACTORY
                 move-result-object v8
+                invoke-static {v8}, ${MAIN_ACTIVITY}->serajrRememberNavHazeState(Ldev/chrisbanes/haze/a1;)V
 
                 new-instance v5, $SOURCE_WRAPPER
 
@@ -1270,7 +1271,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T5-R1 ACTIVE"
+                const-string v1, "D3-K1A.11-T6 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
@@ -1481,6 +1482,218 @@ val fixNavigationBarHazePatch = bytecodePatch(
         // ============================================================
         // END D3-K1A.11-T4 diagnostics
         // ============================================================
+
+
+        // T6: scoped, transition-only native Haze diagnostics.
+        val blurOwner = "Ldev/chrisbanes/haze/blur/d;"
+        val styleType = "Ldev/chrisbanes/haze/blur/d0;"
+        val rendererType = "Ldev/chrisbanes/haze/blur/c;"
+        val blurClass = mutableClassDefBy(blurOwner)
+        val update = blurClass.methods.single { it.toString() == "${blurOwner}->q()V" }
+        val draw = blurClass.methods.single {
+            it.toString() == "${blurOwner}->m(Ldev/chrisbanes/haze/m;Ljava/lang/Object;)V"
+        }
+        val ui = update.implementation ?: error("T6: missing style update")
+        val di = draw.implementation ?: error("T6: missing draw method")
+        val u = ui.instructions.toList()
+        val d = di.instructions.toList()
+        require(ui.registerCount == 12 && di.registerCount == 4 &&
+            u.size > 9 && d.size > 6 &&
+            (update.accessFlags and AccessFlags.STATIC.value) == 0 &&
+            (draw.accessFlags and AccessFlags.STATIC.value) == 0)
+        require(u[8].opcode == Opcode.IPUT_OBJECT &&
+            update.refAt(8) == "${blurOwner}->g:$styleType" &&
+            (u[8] as? TwoRegisterInstruction)?.registerA == 1 &&
+            (u[8] as? TwoRegisterInstruction)?.registerB == 11 &&
+            u[9].opcode == Opcode.IGET_BOOLEAN &&
+            update.refAt(9) == "${styleType}->a:Z" &&
+            (u[9] as? TwoRegisterInstruction)?.registerA == 2 &&
+            (u[9] as? TwoRegisterInstruction)?.registerB == 0) {
+            "T6: unexpected style update anchor"
+        }
+        require(d[5].opcode == Opcode.INVOKE_INTERFACE &&
+            draw.refAt(5) == "${rendererType}->d(Ldev/chrisbanes/haze/m;Ldev/chrisbanes/haze/m;)V" &&
+            (d[5] as? FiveRegisterInstruction)?.registerCount == 3 &&
+            (d[5] as? FiveRegisterInstruction)?.registerC == 0 &&
+            (d[5] as? FiveRegisterInstruction)?.registerD == 2 &&
+            (d[5] as? FiveRegisterInstruction)?.registerE == 2) {
+            "T6: unexpected renderer draw anchor"
+        }
+        require(mutableClass.methods.none { it.name in setOf(
+            "serajrRememberNavHazeState", "serajrIsNavHazeEffect",
+            "serajrProbeHazeUpdate", "serajrProbeHazeDraw") })
+        require(mutableClass.fields.none { it.name in setOf(
+            "serajrNavHazeStateRef", "serajrNavHazeAwaitingBlur") })
+        addStaticField("serajrNavHazeStateRef", "Ljava/lang/ref/WeakReference;")
+        addStaticField("serajrNavHazeAwaitingBlur", "I")
+
+        addStaticMethod(
+            name = "serajrRememberNavHazeState",
+            parameters = listOf("Ldev/chrisbanes/haze/a1;"),
+            returnType = "V",
+            registers = 2,
+            public = false,
+            body = """
+                sget-object v0, Lcom/x/android/main/MainActivity;->serajrNavHazeStateRef:Ljava/lang/ref/WeakReference;
+                if-eqz v0, :store
+
+                invoke-virtual {v0}, Ljava/lang/ref/WeakReference;->get()Ljava/lang/Object;
+                move-result-object v0
+                if-eq v0, p0, :done
+
+                :store
+                const/4 v0, 0x0
+                sput v0, Lcom/x/android/main/MainActivity;->serajrNavHazeAwaitingBlur:I
+                new-instance v0, Ljava/lang/ref/WeakReference;
+                invoke-direct {v0, p0}, Ljava/lang/ref/WeakReference;-><init>(Ljava/lang/Object;)V
+                sput-object v0, Lcom/x/android/main/MainActivity;->serajrNavHazeStateRef:Ljava/lang/ref/WeakReference;
+
+                :done
+                return-void
+            """
+        )
+
+        addStaticMethod(
+            name = "serajrIsNavHazeEffect",
+            parameters = listOf("Ldev/chrisbanes/haze/blur/d;"),
+            returnType = "Z",
+            registers = 3,
+            public = false,
+            body = """
+                sget-object v0, Lcom/x/android/main/MainActivity;->serajrNavHazeStateRef:Ljava/lang/ref/WeakReference;
+                if-eqz v0, :false
+
+                invoke-virtual {v0}, Ljava/lang/ref/WeakReference;->get()Ljava/lang/Object;
+                move-result-object v0
+                if-eqz v0, :false
+
+                iget-object v1, p0, Ldev/chrisbanes/haze/blur/d;->b:Ldev/chrisbanes/haze/s;
+                if-eqz v1, :false
+
+                iget-object v1, v1, Ldev/chrisbanes/haze/s;->a:Ldev/chrisbanes/haze/x;
+                if-eqz v1, :false
+
+                iget-object v1, v1, Ldev/chrisbanes/haze/x;->t:Ldev/chrisbanes/haze/e0;
+                if-eqz v1, :false
+
+                iget-object v1, v1, Ldev/chrisbanes/haze/e0;->a:Ldev/chrisbanes/haze/a1;
+                if-ne v1, v0, :false
+
+                const/4 v0, 0x1
+                return v0
+
+                :false
+                const/4 v0, 0x0
+                return v0
+            """
+        )
+
+        addStaticMethod(
+            name = "serajrProbeHazeUpdate",
+            parameters = listOf("Ldev/chrisbanes/haze/blur/d;", "Ldev/chrisbanes/haze/blur/d0;", "Ldev/chrisbanes/haze/blur/d0;"),
+            returnType = "V",
+            registers = 9,
+            public = true,
+            body = """
+                invoke-static {p0}, Lcom/x/android/main/MainActivity;->serajrIsNavHazeEffect(Ldev/chrisbanes/haze/blur/d;)Z
+                move-result v0
+                if-eqz v0, :done
+
+                iget-boolean v2, p1, Ldev/chrisbanes/haze/blur/d0;->a:Z
+                iget-boolean v3, p2, Ldev/chrisbanes/haze/blur/d0;->a:Z
+                if-eq v2, v3, :done
+
+                sput v3, Lcom/x/android/main/MainActivity;->serajrNavHazeAwaitingBlur:I
+
+                iget v4, p2, Ldev/chrisbanes/haze/blur/d0;->b:F
+                iget v5, p2, Ldev/chrisbanes/haze/blur/d0;->g:F
+
+                new-instance v0, Ljava/lang/StringBuilder;
+                invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V
+
+                const-string v1, "EFFECT_UPDATE en="
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v0, v2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+                const-string v1, "->"
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v0, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+                const-string v1, " radius="
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v0, v4}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+                const-string v1, " alpha="
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                invoke-virtual {v0, v5}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+
+                invoke-virtual {v0}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+                move-result-object v0
+                const-string v1, "SerajrNavHaze"
+                invoke-static {v1, v0}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+
+                :done
+                return-void
+            """
+        )
+
+        addStaticMethod(
+            name = "serajrProbeHazeDraw",
+            parameters = listOf("Ldev/chrisbanes/haze/blur/d;"),
+            returnType = "V",
+            registers = 6,
+            public = true,
+            body = """
+                sget v0, Lcom/x/android/main/MainActivity;->serajrNavHazeAwaitingBlur:I
+                if-eqz v0, :done
+
+                invoke-static {p0}, Lcom/x/android/main/MainActivity;->serajrIsNavHazeEffect(Ldev/chrisbanes/haze/blur/d;)Z
+                move-result v0
+                if-eqz v0, :done
+
+                iget-object v0, p0, Ldev/chrisbanes/haze/blur/d;->g:Ldev/chrisbanes/haze/blur/d0;
+                iget-boolean v1, v0, Ldev/chrisbanes/haze/blur/d0;->a:Z
+                if-eqz v1, :done
+
+                iget v2, v0, Ldev/chrisbanes/haze/blur/d0;->g:F
+                const/4 v3, 0x0
+                cmpl-float v3, v2, v3
+                if-lez v3, :done
+
+                iget-object v1, p0, Ldev/chrisbanes/haze/blur/d;->h:Ldev/chrisbanes/haze/blur/c;
+                instance-of v3, v1, Ldev/chrisbanes/haze/blur/s;
+                if-nez v3, :eligible
+                instance-of v3, v1, Ldev/chrisbanes/haze/blur/a0;
+                if-eqz v3, :done
+
+                :eligible
+                const/4 v3, 0x0
+                sput v3, Lcom/x/android/main/MainActivity;->serajrNavHazeAwaitingBlur:I
+
+                new-instance v0, Ljava/lang/StringBuilder;
+                invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V
+
+                const-string v1, "FIRST_ELIGIBLE_DRAW radius="
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                iget-object v1, p0, Ldev/chrisbanes/haze/blur/d;->g:Ldev/chrisbanes/haze/blur/d0;
+                iget v2, v1, Ldev/chrisbanes/haze/blur/d0;->b:F
+                invoke-virtual {v0, v2}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+                const-string v3, " alpha="
+                invoke-virtual {v0, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+                iget v1, v1, Ldev/chrisbanes/haze/blur/d0;->g:F
+                invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+
+                invoke-virtual {v0}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+                move-result-object v0
+                const-string v1, "SerajrNavHaze"
+                invoke-static {v1, v0}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
+
+                :done
+                return-void
+            """
+        )
+
+        update.addInstructions(9,
+            "invoke-static {p0, v0, v1}, ${MAIN_ACTIVITY}->serajrProbeHazeUpdate($blurOwner$styleType$styleType)V")
+        draw.addInstructions(6,
+            "invoke-static {p0}, ${MAIN_ACTIVITY}->serajrProbeHazeDraw($blurOwner)V")
 
         // T5: publish the active root snapshot without clobbering v9.
         rootObserver.addInstructions(64, "invoke-static {v9}, $PUBLISH_ROOT_CONTEXT")
