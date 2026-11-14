@@ -1,6 +1,8 @@
 package app.serajr.patches.navigationbar
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.util.smali.ExternalLabel
 import app.morphe.patcher.extensions.InstructionExtensions.removeInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableField.Companion.toMutable
@@ -116,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazePatch = bytecodePatch(
     name = "Fix Navigation Bar Haze",
-    description = "D3-K1A.11-T7: native Navigation Bar Haze with alpha visibility and scoped diagnostics.",
+    description = "D3-K1A.11-T7-R1: native Navigation Bar Haze with alpha visibility and scoped diagnostics.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -596,16 +598,14 @@ val fixNavigationBarHazePatch = bytecodePatch(
             return-void
         """.trimIndent())
         alphaClass.methods.add(alphaConstructor)
-        alphaInvoke.addInstructions(1, """
+        alphaInvoke.addInstructionsWithLabels(1, """
             iget-boolean v0, p0, ${alphaType}->serajrAlphaOnly:Z
             if-eqz v0, :serajr_alpha_normal
             iget v0, p0, ${alphaType}->serajrAlpha:F
             invoke-interface {p1, v0}, Ldev/chrisbanes/haze/blur/l;->j(F)V
             sget-object v0, Lkotlin/Unit;->a:Lkotlin/Unit;
             return-object v0
-            :serajr_alpha_normal
-            nop
-        """.trimIndent())
+        """.trimIndent(), ExternalLabel("serajr_alpha_normal", 1))
         addStaticField("serajrNavHazeAlphaZero", alphaType)
         addStaticField("serajrNavHazeAlphaOne", alphaType)
         addStaticMethod(
@@ -1345,7 +1345,7 @@ val fixNavigationBarHazePatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T7 ACTIVE"
+                const-string v1, "D3-K1A.11-T7-R1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
