@@ -118,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1: feed-local Navigation Bar Haze with native Bottom Bar styling (Con.",
+    description = "D3-K1A.11-T10-B1-T2: continuous feed-local Navigation Bar Haze with diagnostic magenta tint.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1024,11 +1024,14 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke-static {v0, v4}, $INSETS_PADDING
                 move-result-object v0
 
-                # Stock theme color and tint; mask both to transparent when hidden.
+                # Stock theme background and diagnostic magenta tint.
                 invoke-static {p1}, Lcom/x/compose/core/m0;->a(Landroidx/compose/runtime/Composer;)J
                 move-result-wide v2
+                
+                const-wide v7, -0xff0100000000L
+                
                 const/high16 v5, 0x3f400000
-                invoke-static {v5, v2, v3}, Landroidx/compose/ui/graphics/z;->b(FJ)J
+                invoke-static {v5, v7, v8}, Landroidx/compose/ui/graphics/z;->b(FJ)J
                 move-result-wide v7
 
                 # Visibility gate 0/1 -> 64-bit mask 0/-1.
@@ -1257,7 +1260,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1-T1 ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T2 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
