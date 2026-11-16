@@ -118,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-A: feed-local Navigation Bar geometry and visibility test.",
+    description = "D3-K1A.11-T10-A-R1: feed-local Navigation Bar geometry and visibility test.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1233,7 +1233,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-A ACTIVE"
+                const-string v1, "D3-K1A.11-T10-A-R1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
@@ -1428,15 +1428,29 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         // This also identifies T4 if ROUTE/BAR are never reached.
         // ------------------------------------------------------------
 
-        val t4HookCandidates = mutableClass.methods.filter {
-            it.toString() == HOOK_DESCRIPTOR
-        }
+        //val t4HookCandidates = mutableClass.methods.filter {
+        //    it.toString() == HOOK_DESCRIPTOR
+        //}
 
-        require(t4HookCandidates.size == 1) {
-            "FixNavigationBarHaze T4: expected one injected Haze hook."
-        }
+        //require(t4HookCandidates.size == 1) {
+        //    "FixNavigationBarHaze T4: expected one injected Haze hook."
+        //}
 
-        t4HookCandidates.single().addInstructions(
+        //t4HookCandidates.single().addInstructions(
+        //    0,
+        //    "invoke-static {}, $diagVersionDescriptor"
+        //)
+
+        val t10OverlayCandidates = mutableClass.methods.filter {
+            it.toString() ==
+                "${MAIN_ACTIVITY}->serajrComposeFeedNavOverlay(Ldev/chrisbanes/haze/a1;Landroidx/compose/runtime/Composer;)V"
+        }
+        
+        require(t10OverlayCandidates.size == 1) {
+            "FixNavigationBarHaze T10-A-R1: expected one injected feed overlay."
+        }
+        
+        t10OverlayCandidates.single().addInstructions(
             0,
             "invoke-static {}, $diagVersionDescriptor"
         )
