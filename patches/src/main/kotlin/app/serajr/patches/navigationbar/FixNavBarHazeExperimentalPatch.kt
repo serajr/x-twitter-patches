@@ -118,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1: feed-local Navigation Bar Haze with native Bottom Bar styling.",
+    description = "D3-K1A.11-T10-B1: feed-local Navigation Bar Haze with native Bottom Bar styling (Con.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1005,7 +1005,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 ushr-int/lit8 v8, v7, 0x1
                 and-int/2addr v8, v9
                 or-int/2addr v11, v8
-                and-int/2addr v6, v11
+                move v6, v11
 
                 invoke-static {v10, v11, v6}, $DIAG_HOOK
 
@@ -1257,7 +1257,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1 ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
