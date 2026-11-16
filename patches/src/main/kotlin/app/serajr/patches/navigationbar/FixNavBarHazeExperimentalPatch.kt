@@ -118,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-A-R1: feed-local Navigation Bar geometry and visibility test.",
+    description = "D3-K1A.11-T10-B: feed-local Navigation Bar Haze using the native Feed HazeState.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -131,7 +131,6 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         var tabAnchor = -1
 
         val requiredMethods = setOf(
-            "Landroidx/compose/foundation/p;->k(JLandroidx/compose/ui/Modifier;)Landroidx/compose/ui/Modifier;",
             "Landroidx/compose/foundation/layout/s;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V",
             HAZE_EFFECT_METHOD,
             BOX_ALIGN,
@@ -943,13 +942,13 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             """
         )
 
-        // T10-A: a stable Spacer in the existing Scaffold MainContent Box.
+        // T10-B: a stable Spacer in the existing Scaffold MainContent Box.
         val feedOwner = "Lcom/x/home/tabbed/c0;"
         val statusCall = "Lcom/x/ui/common/tabs/a;->i(Lcom/x/compose/core/g2;Ldev/chrisbanes/haze/a1;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V"
         val feedMethod = mutableClassDefBy(feedOwner).methods.single {
             it.name == "q" && it.parameterTypes.map { p -> p.toString() } == List(5) { "Ljava/lang/Object;" } && it.returnType == "Ljava/lang/Object;"
         }
-        val feedImpl = feedMethod.implementation ?: error("T10-A: missing feed composition")
+        val feedImpl = feedMethod.implementation ?: error("T10-B: missing feed composition")
         val feedIns = feedImpl.instructions.toList()
         require(feedImpl.registerCount == 26 && (feedMethod.accessFlags and AccessFlags.STATIC.value) == 0)
         val feedAnchor = feedIns.indices.single { feedMethod.refAt(it) == statusCall }
@@ -963,7 +962,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         addStaticMethod(
             name = overlayName,
             parameters = listOf("Ldev/chrisbanes/haze/a1;", "Landroidx/compose/runtime/Composer;"),
-            returnType = "V", registers = 14, public = true,
+            returnType = "V", registers = 15, public = true,
             body = """
                 invoke-static {}, $GET_STATE_DESCRIPTOR
                 move-result-object v6
@@ -1006,14 +1005,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
 
                 invoke-static {v10, v11, v6}, $DIAG_HOOK
 
-                # Branchless ARGB mask: visible -> FFFF00FF, hidden -> 0.
-                neg-int v6, v6
-                const v2, -0xff01
-                and-int/2addr v2, v6
-                int-to-long v2, v2
-                const/16 v6, 0x20
-                shl-long/2addr v2, v6
-
+                # Preserve the validated geometry before applying Haze.
                 sget-object v0, $MODIFIER_SINGLETON
                 sget-object v1, $BOTTOM_CENTER
                 sget-object v4, $BOX_SCOPE_INSTANCE
@@ -1022,13 +1014,28 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 const/high16 v1, 0x3f800000
                 invoke-static {v0, v1}, $FILL_WIDTH
                 move-result-object v0
-                invoke-static {v2, v3, v0}, Landroidx/compose/foundation/p;->k(JLandroidx/compose/ui/Modifier;)Landroidx/compose/ui/Modifier;
-                move-result-object v0
                 invoke-static {p1}, $NAV_INSETS_FACTORY
                 move-result-object v4
                 iget-object v4, v4, $NAV_INSETS_FIELD
                 invoke-static {v0, v4}, $INSETS_PADDING
                 move-result-object v0
+
+                # Native Feed HazeState, transparent background, no tints.
+                move-object v1, p0
+                const-wide/16 v2, 0x0
+                invoke-static {}, Ljava/util/Collections;->emptyList()Ljava/util/List;
+                move-result-object v4
+                const/high16 v5, 0x42000000
+                # v6 retains the validated visibility gate.
+                const v7, 0x3d4ccccd
+                const/4 v8, 0x0
+                const/4 v9, 0x0
+                move-object v10, p1
+                const/4 v11, 0x0
+                const/4 v12, 0x0
+                invoke-static/range {v0 .. v12}, $HAZE_EFFECT_METHOD
+                move-result-object v0
+
                 const/4 v1, 0x0
                 invoke-static {v0, p1, v1}, Landroidx/compose/foundation/layout/s;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V
                 return-void
@@ -1089,7 +1096,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             """.trimIndent()
         )
 
-        // T10-A: root content and root Spacer remain stock.
+        // T10-B: root content and root Spacer remain stock.
 
         // ============================================================
         // D3-K1A.11-T4 — Route and Bar Host Diagnostics
@@ -1233,7 +1240,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-A-R1 ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
@@ -1428,28 +1435,14 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         // This also identifies T4 if ROUTE/BAR are never reached.
         // ------------------------------------------------------------
 
-        //val t4HookCandidates = mutableClass.methods.filter {
-        //    it.toString() == HOOK_DESCRIPTOR
-        //}
-
-        //require(t4HookCandidates.size == 1) {
-        //    "FixNavigationBarHaze T4: expected one injected Haze hook."
-        //}
-
-        //t4HookCandidates.single().addInstructions(
-        //    0,
-        //    "invoke-static {}, $diagVersionDescriptor"
-        //)
-
         val t10OverlayCandidates = mutableClass.methods.filter {
-            it.toString() ==
-                "${MAIN_ACTIVITY}->serajrComposeFeedNavOverlay(Ldev/chrisbanes/haze/a1;Landroidx/compose/runtime/Composer;)V"
+            it.toString() == "${MAIN_ACTIVITY}->${overlayName}(Ldev/chrisbanes/haze/a1;Landroidx/compose/runtime/Composer;)V"
         }
-        
+
         require(t10OverlayCandidates.size == 1) {
-            "FixNavigationBarHaze T10-A-R1: expected one injected feed overlay."
+            "FixNavigationBarHaze T10-B: expected one injected feed overlay."
         }
-        
+
         t10OverlayCandidates.single().addInstructions(
             0,
             "invoke-static {}, $diagVersionDescriptor"
