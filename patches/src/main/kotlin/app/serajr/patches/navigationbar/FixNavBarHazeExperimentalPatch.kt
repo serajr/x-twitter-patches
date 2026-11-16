@@ -88,6 +88,10 @@ private const val GET_ROOT_CONTEXT = "${MAIN_ACTIVITY}->serajrGetRootContextStat
 private const val PUBLISH_ROOT_CONTEXT = "${MAIN_ACTIVITY}->serajrOnRootContext(${CHILD_STACK})V"
 private const val LAST_ROOT_CLASS = "${MAIN_ACTIVITY}->serajrNavLastRootClass:Ljava/lang/Class;"
 
+// Haze.
+private const val FORCE_HAZE_ALWAYS_VISIBLE = true
+private const val DEBUG_MAGENTA_TINT = false
+
 // D3-K1A.11-T2: temporary diagnostics.
 private const val DIAG_TAG = "SerajrNavHaze"
 
@@ -118,7 +122,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1-T2: continuous feed-local Navigation Bar Haze with diagnostic magenta tint.",
+    description = "D3-K1A.11-T10-B1-T3A: native Navigation Bar Haze with configurable visibility and diagnostic tint.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1007,6 +1011,12 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 or-int/2addr v11, v8
                 move v6, v11
 
+                ${if (FORCE_HAZE_ALWAYS_VISIBLE) {
+                    "const/4 v6, 0x1"
+                } else {
+                    "and-int/2addr v6, v11"
+                }}
+
                 invoke-static {v10, v11, v6}, $DIAG_HOOK
 
                 # Preserve the validated geometry before applying Haze.
@@ -1024,11 +1034,16 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke-static {v0, v4}, $INSETS_PADDING
                 move-result-object v0
 
-                # Stock theme background and diagnostic magenta tint.
+                # Stock theme background.
                 invoke-static {p1}, Lcom/x/compose/core/m0;->a(Landroidx/compose/runtime/Composer;)J
                 move-result-wide v2
                 
-                const-wide v7, -0xff0100000000L
+                # Select diagnostic magenta or native theme tint.
+                ${if (DEBUG_MAGENTA_TINT) {
+                    "const-wide v7, -0xff0100000000L"
+                } else {
+                    "move-wide v7, v2"
+                }}
                 
                 const/high16 v5, 0x3f400000
                 invoke-static {v5, v7, v8}, Landroidx/compose/ui/graphics/z;->b(FJ)J
@@ -1260,7 +1275,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1-T2 ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T3A ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
