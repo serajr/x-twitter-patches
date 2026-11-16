@@ -26,7 +26,7 @@ private const val MAIN_ACTIVITY = "Lcom/x/android/main/MainActivity;"
 private const val SOURCE_WRAPPER = "Lcom/x/compose/theme/j;"
 private const val HAZE_STATE_HELPER = "Lcom/x/ui/common/post/b;"
 private const val HAZE_EFFECT_OWNER = "Lcom/x/compose/core/o0;"
-private const val HAZE_EFFECT_METHOD = "${HAZE_EFFECT_OWNER}->c(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;JLjava/util/List;FZFLdev/chrisbanes/haze/k0;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)Landroidx/compose/ui/Modifier;"
+private const val HAZE_EFFECT_METHOD = "${HAZE_EFFECT_OWNER}->b(Landroidx/compose/ui/Modifier;Ldev/chrisbanes/haze/a1;JLdev/chrisbanes/haze/blur/g0;FZFLdev/chrisbanes/haze/j0;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)Landroidx/compose/ui/Modifier;"
 
 private const val ALIGNMENT_OWNER = "Landroidx/compose/ui/b;"
 private const val BOTTOM_START = "${ALIGNMENT_OWNER}->g:Landroidx/compose/ui/i;"
@@ -118,7 +118,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B: feed-local Navigation Bar Haze using the native Feed HazeState.",
+    description = "D3-K1A.11-T10-B1: feed-local Navigation Bar Haze with native Bottom Bar styling.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -133,6 +133,10 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         val requiredMethods = setOf(
             "Landroidx/compose/foundation/layout/s;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V",
             HAZE_EFFECT_METHOD,
+            "Lcom/x/compose/core/m0;->a(Landroidx/compose/runtime/Composer;)J",
+            "Lcom/x/compose/core/m0;->b(Landroidx/compose/runtime/Composer;)Z",
+            "Landroidx/compose/ui/graphics/z;->b(FJ)J",
+            "Ldev/chrisbanes/haze/blur/g0;-><init>(J)V",
             BOX_ALIGN,
             FILL_WIDTH,
             NAV_INSETS_FACTORY,
@@ -942,13 +946,13 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             """
         )
 
-        // T10-B: a stable Spacer in the existing Scaffold MainContent Box.
+        // T10-B1: a stable Spacer in the existing Scaffold MainContent Box.
         val feedOwner = "Lcom/x/home/tabbed/c0;"
         val statusCall = "Lcom/x/ui/common/tabs/a;->i(Lcom/x/compose/core/g2;Ldev/chrisbanes/haze/a1;Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;II)V"
         val feedMethod = mutableClassDefBy(feedOwner).methods.single {
             it.name == "q" && it.parameterTypes.map { p -> p.toString() } == List(5) { "Ljava/lang/Object;" } && it.returnType == "Ljava/lang/Object;"
         }
-        val feedImpl = feedMethod.implementation ?: error("T10-B: missing feed composition")
+        val feedImpl = feedMethod.implementation ?: error("T10-B1: missing feed composition")
         val feedIns = feedImpl.instructions.toList()
         require(feedImpl.registerCount == 26 && (feedMethod.accessFlags and AccessFlags.STATIC.value) == 0)
         val feedAnchor = feedIns.indices.single { feedMethod.refAt(it) == statusCall }
@@ -1020,19 +1024,32 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke-static {v0, v4}, $INSETS_PADDING
                 move-result-object v0
 
-                # Native Feed HazeState, transparent background, no tints.
+                # Stock theme color and tint; mask both to transparent when hidden.
+                invoke-static {p1}, Lcom/x/compose/core/m0;->a(Landroidx/compose/runtime/Composer;)J
+                move-result-wide v2
+                const/high16 v5, 0x3f400000
+                invoke-static {v5, v2, v3}, Landroidx/compose/ui/graphics/z;->b(FJ)J
+                move-result-wide v7
+
+                # Visibility gate 0/1 -> 64-bit mask 0/-1.
+                neg-int v9, v6
+                int-to-long v9, v9
+                and-long/2addr v2, v9
+                and-long/2addr v7, v9
+                new-instance v4, Ldev/chrisbanes/haze/blur/g0;
+                invoke-direct {v4, v7, v8}, Ldev/chrisbanes/haze/blur/g0;-><init>(J)V
+
+                invoke-static {p1}, Lcom/x/compose/core/m0;->b(Landroidx/compose/runtime/Composer;)Z
+                move-result v5
+                and-int/2addr v6, v5
                 move-object v1, p0
-                const-wide/16 v2, 0x0
-                invoke-static {}, Ljava/util/Collections;->emptyList()Ljava/util/List;
-                move-result-object v4
                 const/high16 v5, 0x42000000
-                # v6 retains the validated visibility gate.
                 const v7, 0x3d4ccccd
                 const/4 v8, 0x0
                 const/4 v9, 0x0
                 move-object v10, p1
                 const/4 v11, 0x0
-                const/4 v12, 0x0
+                const/16 v12, 0xc0
                 invoke-static/range {v0 .. v12}, $HAZE_EFFECT_METHOD
                 move-result-object v0
 
@@ -1096,7 +1113,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             """.trimIndent()
         )
 
-        // T10-B: root content and root Spacer remain stock.
+        // T10-B1: root content and root Spacer remain stock.
 
         // ============================================================
         // D3-K1A.11-T4 — Route and Bar Host Diagnostics
@@ -1240,7 +1257,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
@@ -1440,7 +1457,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         }
 
         require(t10OverlayCandidates.size == 1) {
-            "FixNavigationBarHaze T10-B: expected one injected feed overlay."
+            "FixNavigationBarHaze T10-B1: expected one injected feed overlay."
         }
 
         t10OverlayCandidates.single().addInstructions(
