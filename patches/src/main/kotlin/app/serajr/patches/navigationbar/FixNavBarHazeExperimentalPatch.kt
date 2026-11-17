@@ -93,6 +93,12 @@ private const val FORCE_HAZE_ALWAYS_VISIBLE = true
 private const val DEBUG_MAGENTA_TINT = false
 private const val USE_PROGRESSIVE_HAZE = true
 private const val PROGRESSIVE_BLUR_RADIUS = 32.0f
+private const val USE_PROGRESSIVE_MASK = true
+private const val PROGRESSIVE_MASK_FACTORY = "Lcom/google/firebase/perf/logging/b;->J(Ljava/util/List;FFI)Landroidx/compose/ui/graphics/t0;"
+private const val PROGRESSIVE_MASK_SETTER = "Ldev/chrisbanes/haze/blur/l;->c(Landroidx/compose/ui/graphics/v;)V"
+private const val MASK_BLACK = "Landroidx/compose/ui/graphics/z;->b:J"
+private const val MASK_TRANSPARENT = "Landroidx/compose/ui/graphics/z;->m:J"
+private const val MASK_COLOR_CTOR = "Landroidx/compose/ui/graphics/z;-><init>(J)V"
 private const val PROGRESSIVE_CALLBACK = "Lcom/x/compose/core/p0;"
 private const val PROGRESSIVE_TYPE = "Ldev/chrisbanes/haze/n0;"
 private const val PROGRESSIVE_EASING = "Lcom/x/compose/core/s0;->d:Landroidx/compose/animation/core/v;"
@@ -130,7 +136,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1-T4A: native solid or progressive Navigation Bar Haze with configurable radius.",
+    description = "D3-K1A.11-T10-B1-T4B: native solid or progressive Navigation Bar Haze with configurable radius and optional linear mask.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -161,7 +167,11 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             MUTABLE_STATE_FACTORY,
             MUTABLE_STATE_GET,
             MUTABLE_STATE_SET
-        ) + if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_CTOR, PROGRESSIVE_SETTER) else emptySet()
+        ) + (if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_CTOR, PROGRESSIVE_SETTER) else emptySet()) +
+            (if (USE_PROGRESSIVE_HAZE && USE_PROGRESSIVE_MASK)
+                setOf(PROGRESSIVE_MASK_FACTORY, PROGRESSIVE_MASK_SETTER, MASK_COLOR_CTOR,
+                    "Lkotlin/collections/CollectionsKt;->listOf([Ljava/lang/Object;)Ljava/util/List;")
+            else emptySet())
 
         val requiredFields = setOf(
             BOTTOM_START,
@@ -179,7 +189,9 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             "Lcom/x/compose/core/s2;->a:Ljava/lang/Object;",
             "${TAB_CONTENT}->c:Lcom/x/navigation/wd;",
             "${TAB_NAVIGATOR}->h:Lcom/x/navigation/wd;"
-        ) + if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_EASING) else emptySet()
+        ) + (if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_EASING) else emptySet()) +
+            (if (USE_PROGRESSIVE_HAZE && USE_PROGRESSIVE_MASK)
+                setOf(MASK_BLACK, MASK_TRANSPARENT) else emptySet())
 
         val foundMethods = mutableSetOf<String>()
         val foundFields = mutableSetOf<String>()
@@ -579,7 +591,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             mutableClass.methods.add(method)
         }
 
-        // T4A: isolated, cached progressive-only callback.
+        // T4B: isolated, cached progressive-only callback.
         // Stock p0 instances retain their original invoke path.
         if (USE_PROGRESSIVE_HAZE) {
             require(PROGRESSIVE_BLUR_RADIUS.isFinite() && PROGRESSIVE_BLUR_RADIUS > 0f)
@@ -593,7 +605,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 it.name == "invoke" && it.returnType == "Ljava/lang/Object;" &&
                     it.parameterTypes.map { p -> p.toString() } == listOf("Ljava/lang/Object;")
             }
-            val impl = invoke.implementation ?: error("T4A: missing callback implementation")
+            val impl = invoke.implementation ?: error("T4B: missing callback implementation")
             require(impl.registerCount == 14 &&
                 impl.instructions[0].opcode == Opcode.CHECK_CAST &&
                 invoke.refAt(0) == "Ldev/chrisbanes/haze/blur/l;" &&
@@ -602,19 +614,48 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke.refAt(1) == "Lcom/x/compose/core/s0;->b:Landroidx/compose/ui/graphics/t0;" &&
                 (impl.instructions[1] as? OneRegisterInstruction)?.registerA == 0 &&
                 impl.instructions.any { (it as? ReferenceInstruction)?.reference?.toString() == PROGRESSIVE_SETTER }
-            ) { "T4A: unexpected native callback layout" }
+            ) { "T4B: unexpected native callback layout" }
             require(mutableClass.fields.none { it.name == "serajrNavProgressive" })
             require(mutableClass.methods.none { it.name == "serajrGetNavProgressive" })
             callback.fields.add(ImmutableField(PROGRESSIVE_CALLBACK, "serajrProgressiveOnly", "Z",
                 AccessFlags.PRIVATE.value, null, null, null).toMutable())
+            val maskField = "${PROGRESSIVE_CALLBACK}->serajrProgressiveMask:Landroidx/compose/ui/graphics/t0;"
+            if (USE_PROGRESSIVE_MASK) {
+                require(callback.fields.none { it.name == "serajrProgressiveMask" })
+                callback.fields.add(ImmutableField(PROGRESSIVE_CALLBACK, "serajrProgressiveMask",
+                    "Landroidx/compose/ui/graphics/t0;",
+                    AccessFlags.PRIVATE.value or AccessFlags.FINAL.value,
+                    null, null, null).toMutable())
+            }
             val ctor = ImmutableMethod(PROGRESSIVE_CALLBACK, "<init>",
                 emptyList<ImmutableMethodParameter>(), "V",
                 AccessFlags.PUBLIC.value or AccessFlags.CONSTRUCTOR.value,
-                null, null, MutableMethodImplementation(2)).toMutable()
+                null, null, MutableMethodImplementation(if (USE_PROGRESSIVE_MASK) 6 else 2)).toMutable()
             ctor.addInstructions(0, """
                 invoke-direct {p0}, Ljava/lang/Object;-><init>()V
                 const/4 v0, 0x1
                 iput-boolean v0, p0, $flag
+                ${if (USE_PROGRESSIVE_MASK) {
+                    """
+                        # Build the inverted linear mask once per cached callback.
+                        sget-wide v0, $MASK_BLACK
+                        new-instance v2, Landroidx/compose/ui/graphics/z;
+                        invoke-direct {v2, v0, v1}, $MASK_COLOR_CTOR
+                        sget-wide v0, $MASK_TRANSPARENT
+                        new-instance v3, Landroidx/compose/ui/graphics/z;
+                        invoke-direct {v3, v0, v1}, $MASK_COLOR_CTOR
+                        filled-new-array {v2, v3}, [Landroidx/compose/ui/graphics/z;
+                        move-result-object v0
+                        invoke-static {v0}, Lkotlin/collections/CollectionsKt;->listOf([Ljava/lang/Object;)Ljava/util/List;
+                        move-result-object v0
+                        const/high16 v1, 0x7f800000
+                        const/4 v2, 0x0
+                        const/4 v3, 0x0
+                        invoke-static {v0, v1, v2, v3}, $PROGRESSIVE_MASK_FACTORY
+                        move-result-object v0
+                        iput-object v0, p0, $maskField
+                    """.trimIndent()
+                } else ""}
                 return-void
             """.trimIndent())
             callback.methods.add(ctor)
@@ -627,6 +668,12 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 const-wide/16 v4, 0x0
                 invoke-direct/range {v0 .. v5}, $PROGRESSIVE_CTOR
                 invoke-interface {p1, v0}, $PROGRESSIVE_SETTER
+                ${if (USE_PROGRESSIVE_MASK) {
+                    """
+                        iget-object v0, p0, $maskField
+                        invoke-interface {p1, v0}, $PROGRESSIVE_MASK_SETTER
+                    """.trimIndent()
+                } else ""}
                 sget-object v0, Lkotlin/Unit;->a:Lkotlin/Unit;
                 return-object v0
             """.trimIndent(), ExternalLabel("serajr_progressive_stock", 1))
@@ -1360,7 +1407,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1-T4A ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T4B ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
