@@ -136,7 +136,7 @@ private fun Method.refAt(index: Int): String? =
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1-T4B: native solid or progressive Navigation Bar Haze with configurable radius and optional linear mask.",
+    description = "D3-K1A.11-T10-B1-T4B-R1: native solid or progressive Navigation Bar Haze with configurable radius and optional linear mask.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -169,8 +169,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             MUTABLE_STATE_SET
         ) + (if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_CTOR, PROGRESSIVE_SETTER) else emptySet()) +
             (if (USE_PROGRESSIVE_HAZE && USE_PROGRESSIVE_MASK)
-                setOf(PROGRESSIVE_MASK_FACTORY, PROGRESSIVE_MASK_SETTER, MASK_COLOR_CTOR,
-                    "Lkotlin/collections/CollectionsKt;->listOf([Ljava/lang/Object;)Ljava/util/List;")
+                setOf(PROGRESSIVE_MASK_FACTORY, PROGRESSIVE_MASK_SETTER, MASK_COLOR_CTOR)
             else emptySet())
 
         val requiredFields = setOf(
@@ -591,7 +590,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             mutableClass.methods.add(method)
         }
 
-        // T4B: isolated, cached progressive-only callback.
+        // T4B-R1: isolated, cached progressive-only callback.
         // Stock p0 instances retain their original invoke path.
         if (USE_PROGRESSIVE_HAZE) {
             require(PROGRESSIVE_BLUR_RADIUS.isFinite() && PROGRESSIVE_BLUR_RADIUS > 0f)
@@ -605,7 +604,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 it.name == "invoke" && it.returnType == "Ljava/lang/Object;" &&
                     it.parameterTypes.map { p -> p.toString() } == listOf("Ljava/lang/Object;")
             }
-            val impl = invoke.implementation ?: error("T4B: missing callback implementation")
+            val impl = invoke.implementation ?: error("T4B-R1: missing callback implementation")
             require(impl.registerCount == 14 &&
                 impl.instructions[0].opcode == Opcode.CHECK_CAST &&
                 invoke.refAt(0) == "Ldev/chrisbanes/haze/blur/l;" &&
@@ -614,7 +613,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke.refAt(1) == "Lcom/x/compose/core/s0;->b:Landroidx/compose/ui/graphics/t0;" &&
                 (impl.instructions[1] as? OneRegisterInstruction)?.registerA == 0 &&
                 impl.instructions.any { (it as? ReferenceInstruction)?.reference?.toString() == PROGRESSIVE_SETTER }
-            ) { "T4B: unexpected native callback layout" }
+            ) { "T4B-R1: unexpected native callback layout" }
             require(mutableClass.fields.none { it.name == "serajrNavProgressive" })
             require(mutableClass.methods.none { it.name == "serajrGetNavProgressive" })
             callback.fields.add(ImmutableField(PROGRESSIVE_CALLBACK, "serajrProgressiveOnly", "Z",
@@ -646,7 +645,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                         invoke-direct {v3, v0, v1}, $MASK_COLOR_CTOR
                         filled-new-array {v2, v3}, [Landroidx/compose/ui/graphics/z;
                         move-result-object v0
-                        invoke-static {v0}, Lkotlin/collections/CollectionsKt;->listOf([Ljava/lang/Object;)Ljava/util/List;
+                        invoke-static {v0}, Ljava/util/Arrays;->asList([Ljava/lang/Object;)Ljava/util/List;
                         move-result-object v0
                         const/high16 v1, 0x7f800000
                         const/4 v2, 0x0
@@ -1407,7 +1406,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1-T4B ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T4B-R1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
