@@ -20,6 +20,10 @@ public final class PersistentNavigationHaze {
     private static final String SETTINGS_KEY = "serajr_x_fix_nav_bar_haze_disable_blur";
     private static final String RADIUS_KEY = "serajr_x_haze_radius";
     private static final String MAGENTA_KEY = "serajr_x_haze_debug_magenta";
+    private static final String TINT_ALPHA_KEY = "serajr_x_haze_tint_alpha";
+    private static final float DEFAULT_TINT_ALPHA = 0.75f;
+    private static final float MIN_TINT_ALPHA = 0.0f;
+    private static final float MAX_TINT_ALPHA = 1.0f;
     private static final float DEFAULT_RADIUS = 32.0f;
     private static final float MIN_RADIUS = 0.0f;
     private static final float MAX_RADIUS = 64.0f;
@@ -28,6 +32,7 @@ public final class PersistentNavigationHaze {
     private static volatile boolean disableNativeBlur;
     private static volatile float navigationBlurRadius = DEFAULT_RADIUS;
     private static volatile int debugMagentaMode;
+    private static volatile float navigationTintAlpha = DEFAULT_TINT_ALPHA;
     private static ContentObserver settingsObserver;
 
     private PersistentNavigationHaze() { }
@@ -47,11 +52,12 @@ public final class PersistentNavigationHaze {
             resolver.registerContentObserver(Settings.Global.getUriFor(SETTINGS_KEY), false, observer);
             resolver.registerContentObserver(Settings.Global.getUriFor(RADIUS_KEY), false, observer);
             resolver.registerContentObserver(Settings.Global.getUriFor(MAGENTA_KEY), false, observer);
+            resolver.registerContentObserver(Settings.Global.getUriFor(TINT_ALPHA_KEY), false, observer);
             settingsObserver = observer;
             refreshSettings(resolver);
-            Log.i(TAG, "T4E-T1 observer registered (blur, radius, magenta)");
+            Log.i(TAG, "T4E-T2 observer registered (blur, radius, magenta, tint alpha)");
         } catch (RuntimeException e) {
-            Log.w(TAG, "T4E-T1 observer initialization failed", e);
+            Log.w(TAG, "T4E-T2 observer initialization failed", e);
         }
     }
 
@@ -60,7 +66,7 @@ public final class PersistentNavigationHaze {
             disableNativeBlur = Settings.Global.getInt(resolver, SETTINGS_KEY, 0) == 1;
         } catch (RuntimeException e) {
             disableNativeBlur = false;
-            Log.w(TAG, "T4E-T1 blur setting read failed; using native blur", e);
+            Log.w(TAG, "T4E-T2 blur setting read failed; using native blur", e);
         }
         try {
             float value = Settings.Global.getFloat(resolver, RADIUS_KEY, DEFAULT_RADIUS);
@@ -68,18 +74,31 @@ public final class PersistentNavigationHaze {
                     : Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, value));
         } catch (RuntimeException e) {
             navigationBlurRadius = DEFAULT_RADIUS;
-            Log.w(TAG, "T4E-T1 radius setting read failed; using default", e);
+            Log.w(TAG, "T4E-T2 radius setting read failed; using default", e);
         }
         try {
             int mode = Settings.Global.getInt(resolver, MAGENTA_KEY, 0);
             debugMagentaMode = Math.max(0, Math.min(3, mode));
         } catch (RuntimeException e) {
             debugMagentaMode = 0;
-            Log.w(TAG, "T4E-T1 magenta setting read failed; using default", e);
+            Log.w(TAG, "T4E-T2 magenta setting read failed; using default", e);
         }
-        Log.i(TAG, "T4E-T1 disableNativeBlur=" + disableNativeBlur
+        try {
+            float value = Settings.Global.getFloat(resolver, TINT_ALPHA_KEY, DEFAULT_TINT_ALPHA);
+            navigationTintAlpha = Float.isNaN(value) ? DEFAULT_TINT_ALPHA
+                    : Math.max(MIN_TINT_ALPHA, Math.min(MAX_TINT_ALPHA, value));
+        } catch (RuntimeException e) {
+            navigationTintAlpha = DEFAULT_TINT_ALPHA;
+            Log.w(TAG, "T4E-T2 tint alpha setting read failed; using default", e);
+        }
+        Log.i(TAG, "T4E-T2 disableNativeBlur=" + disableNativeBlur
                 + " radius=" + navigationBlurRadius
-                + " magentaMode=" + debugMagentaMode);
+                + " magentaMode=" + debugMagentaMode
+                + " tintAlpha=" + navigationTintAlpha);
+    }
+
+    public static float getNavigationTintAlpha() {
+        return navigationTintAlpha;
     }
 
     public static float getNavigationBlurRadius() {
