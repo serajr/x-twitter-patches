@@ -101,11 +101,17 @@ private const val FORCE_HAZE_ALWAYS_VISIBLE = true
 private const val PROGRESSIVE_BLUR_RADIUS = 32.0f
 
 // Selects the diagnostic magenta replacement for the injected Haze colors.
-// Tint retains its original 75% alpha; background retains native opacity.
+// Tint alpha is independently configurable at runtime; background retains native opacity.
 // Values: 0 = off, 1 = tint, 2 = background, 3 = tint + background.
 // Minimum: 0 | Maximum: 3 | Default: 0.
 // Runtime key: serajr_x_haze_debug_magenta.
 private const val DEBUG_MAGENTA_MODE = 0
+
+// Controls the alpha applied to the injected Haze tint after resolving its color.
+// This does not change the background color or the native progressive mask.
+// Minimum: 0.0 (transparent) | Maximum: 1.0 (opaque) | Default: 0.75.
+// Runtime key: serajr_x_haze_tint_alpha.
+private const val DEFAULT_TINT_ALPHA = 0.75f
 
 // Enables the existing native progressive blur callback.
 // Values: false = solid, true = progressive.
@@ -181,7 +187,7 @@ private fun Method.isNativeBlurRecorder(): Boolean {
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1-T4E-T1: runtime blur radius and four-mode magenta diagnostics with native progressive Haze.",
+    description = "D3-K1A.11-T10-B1-T4E-T2: runtime tint alpha, blur radius and four-mode magenta diagnostics with native progressive Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1224,12 +1230,13 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke-static {p1}, Lcom/x/compose/core/m0;->a(Landroidx/compose/runtime/Composer;)J
                 move-result-wide v2
                 
-                # Resolve the tint independently; preserve its native 75% alpha.
+                # Resolve the tint independently; use the cached runtime tint alpha.
                 move-wide v7, v2
                 invoke-static {v7, v8}, $NAV_EXTENSION->resolveTintColor(J)J
                 move-result-wide v7
 
-                const/high16 v5, 0x3f400000
+                invoke-static {}, $NAV_EXTENSION->getNavigationTintAlpha()F
+                move-result v5
                 invoke-static {v5, v7, v8}, Landroidx/compose/ui/graphics/z;->b(FJ)J
                 move-result-wide v7
 
