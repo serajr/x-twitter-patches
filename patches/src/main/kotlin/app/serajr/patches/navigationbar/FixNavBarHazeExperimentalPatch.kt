@@ -113,6 +113,12 @@ private const val DEBUG_MAGENTA_MODE = 0
 // Runtime key: serajr_x_haze_tint_alpha.
 private const val DEFAULT_TINT_ALPHA = 0.75f
 
+// Controls the native Haze noise factor for the injected Navigation Bar overlay.
+// This changes only the noise amount; it does not modify blur, tint or the mask.
+// Minimum: 0.0 (off) | Maximum: 1.0 | Default: 0.05 (validated T4E-T2).
+// Runtime key: serajr_x_haze_noise_factor.
+private const val DEFAULT_NOISE_FACTOR = 0.05f
+
 // Enables the existing native progressive blur callback.
 // Values: false = solid, true = progressive.
 // Default: true.
@@ -187,7 +193,7 @@ private fun Method.isNativeBlurRecorder(): Boolean {
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T10-B1-T4E-T2: runtime tint alpha, blur radius and four-mode magenta diagnostics with native progressive Haze.",
+    description = "D3-K1A.11-T10-B1-T4E-T3: runtime noise, tint alpha, blur radius and magenta diagnostics with native progressive Haze.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1258,7 +1264,8 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 move-object v1, p0
                 invoke-static {}, $NAV_EXTENSION->getNavigationBlurRadius()F
                 move-result v5
-                const v7, 0x3d4ccccd
+                invoke-static {}, $NAV_EXTENSION->getNavigationNoiseFactor()F
+                move-result v7
                 const/4 v8, 0x0
                 ${if (USE_PROGRESSIVE_HAZE) {
                     """
@@ -1478,7 +1485,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T10-B1-T4E-T1 ACTIVE"
+                const-string v1, "D3-K1A.11-T10-B1-T4E-T3 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
