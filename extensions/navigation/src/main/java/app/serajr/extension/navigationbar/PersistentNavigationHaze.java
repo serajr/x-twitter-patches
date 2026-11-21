@@ -58,14 +58,22 @@ public final class PersistentNavigationHaze {
             // API 33+ requires an explicit exported flag for non-system broadcasts.
             // The receiver is intentionally limited to harmless visual settings.
             if (android.os.Build.VERSION.SDK_INT >= 33) {
-                app.registerReceiver(newReceiver, filter, Context.RECEIVER_EXPORTED);
+                // Resolve the framework overload at runtime. Some patch/R8 builds
+                // incorrectly rewrite the direct three-argument call into a
+                // missing synthetic static method (La;->a(...)).
+                Method register = Context.class.getMethod(
+                        "registerReceiver",
+                        android.content.BroadcastReceiver.class,
+                        android.content.IntentFilter.class,
+                        int.class);
+                register.invoke(app, newReceiver, filter, 2 /* RECEIVER_EXPORTED */);
             } else {
                 app.registerReceiver(newReceiver, filter);
             }
             receiver = newReceiver;
             Log.i(TAG, "T4E-T4 broadcast receiver registered; preferences loaded");
             logConfiguration("initial");
-        } catch (RuntimeException e) {
+        } catch (Exception | LinkageError e) {
             Log.w(TAG, "T4E-T4 receiver initialization failed", e);
         }
     }
