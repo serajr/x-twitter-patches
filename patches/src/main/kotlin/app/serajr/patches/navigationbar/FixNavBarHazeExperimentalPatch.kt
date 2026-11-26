@@ -189,7 +189,7 @@ private fun Method.isNativeBlurRecorder(): Boolean {
     }
 }
 
-// Fix 3-T1: identify the MainContent Box without its obfuscated class name.
+// Fix 3-T1A: identify the MainContent Box without its obfuscated class name.
 private fun Method.scaffoldDebugAnchor(): Pair<Int, Int>? {
     if (name != "invoke" || returnType != "Ljava/lang/Object;" ||
         parameterTypes.map { it.toString() } != listOf("Ljava/lang/Object;", "Ljava/lang/Object;") ||
@@ -216,7 +216,7 @@ private fun Method.scaffoldDebugAnchor(): Pair<Int, Int>? {
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T5 Global Overlay Fix 3-T1: structural Scaffold MainContent fingerprint and magenta geometry probe.",
+    description = "D3-K1A.11-T5 Global Overlay Fix 3-T1A: structural Scaffold MainContent fingerprint and extended magenta geometry probe (+100 dp).",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -1195,9 +1195,9 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             """
         )
 
-        // Fix 3-T1: replace the Fix 2 injection with a pure geometry probe.
+        // Fix 3-T1A: replace the Fix 2 injection with a pure geometry probe.
         require(scaffoldCandidates.size == 1) {
-            "T5 Fix 3-T1: expected one structural Scaffold candidate, found ${scaffoldCandidates.size}"
+            "T5 Fix 3-T1A: expected one structural Scaffold candidate, found ${scaffoldCandidates.size}"
         }
         val scaffoldOriginal = scaffoldCandidates.single()
         val scaffold = mutableClassDefBy(scaffoldOriginal.definingClass).methods.single {
@@ -1226,6 +1226,12 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 invoke-static {v2, v3, v0}, Landroidx/compose/foundation/p;->k(JLandroidx/compose/ui/Modifier;)Landroidx/compose/ui/Modifier;
                 move-result-object v0
                 invoke-static {v0, v4}, $INSETS_PADDING
+                move-result-object v0
+                # Extended probe: 50 dp vertical padding on each side.
+                const/4 v1, 0x0
+                const/high16 v2, 0x42480000
+                const/4 v3, 0x0
+                invoke-static {v1, v2, v3, v0}, Landroidx/compose/foundation/layout/e;->C(FFILandroidx/compose/ui/Modifier;)Landroidx/compose/ui/Modifier;
                 move-result-object v0
                 const/4 v1, 0x0
                 invoke-static {v0, p0, v1}, Landroidx/compose/foundation/layout/s;->a(Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V
@@ -1431,7 +1437,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T5 GLOBAL OVERLAY FIX 3-T1 ACTIVE"
+                const-string v1, "D3-K1A.11-T5 GLOBAL OVERLAY FIX 3-T1A ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
