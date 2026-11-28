@@ -67,6 +67,7 @@ private const val WRITE_STATE_NAME = "serajrOnBottomBarVisible"
 private const val WRITE_STATE_DESCRIPTOR = "${MAIN_ACTIVITY}->${WRITE_STATE_NAME}(Z)V"
 
 private const val TAB_CONTENT = "Lcom/x/main/tabs/x;"
+private const val ENABLE_LEGACY_TAB_PUSH = false
 private const val TAB_NAVIGATOR = "Lcom/x/main/tabs/g;"
 private const val CHILD_STACK = "Lcom/arkivanov/decompose/router/stack/a;"
 private const val TAB_STACK_FIELD = "${TAB_NAVIGATOR}->p:Lcom/arkivanov/decompose/value/operator/a;"
@@ -217,7 +218,7 @@ private fun Method.scaffoldDebugAnchor(): Pair<Int, Int>? {
 @Suppress("unused")
 val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
     name = "Fix Navigation Bar Haze (Experimental)",
-    description = "D3-K1A.11-T5 Global Overlay Fix 3-T2: structural Scaffold MainContent fingerprint and independent Haze source.",
+    description = "D3-K1A.11-T5 Global Overlay Fix 3-T3A.1: independent Haze source and optional legacy Tab Push diagnostics.",
     default = false
 ) {
     compatibleWith(Constants.COMPATIBILITY_X)
@@ -272,9 +273,8 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
             "${CHILD_STACK}->a:Lcom/arkivanov/decompose/b;",
             "Lcom/arkivanov/decompose/b;->b:Ljava/lang/Object;",
             "Lcom/x/compose/core/s2;->a:Ljava/lang/Object;",
-            "${TAB_CONTENT}->c:Lcom/x/navigation/wd;",
-            "${TAB_NAVIGATOR}->h:Lcom/x/navigation/wd;"
-        ) + (if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_EASING) else emptySet()) +
+            "${TAB_CONTENT}->c:Lcom/x/navigation/wd;"
+        ) + (if (ENABLE_LEGACY_TAB_PUSH) setOf("${TAB_NAVIGATOR}->h:Lcom/x/navigation/wd;") else emptySet()) + (if (USE_PROGRESSIVE_HAZE) setOf(PROGRESSIVE_EASING) else emptySet()) +
             (if (USE_PROGRESSIVE_HAZE && USE_PROGRESSIVE_MASK)
                 setOf(MASK_BLACK, MASK_TRANSPARENT) else emptySet())
 
@@ -360,7 +360,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                         }
                 }
 
-                TAB_NAVIGATOR -> {
+                TAB_NAVIGATOR -> if (ENABLE_LEGACY_TAB_PUSH) {
                     val candidates = classDef.methods.filter { method ->
                         method.name == "t" &&
                             method.returnType == "V" &&
@@ -458,8 +458,9 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         val tab = originalTabContent
             ?: error("FixNavigationBarHaze: tabs/x.invoke not found.")
 
-        val tabPush = originalTabPush
-            ?: error("FixNavigationBarHaze: tabs/g.t not found.")
+        val tabPush = if (ENABLE_LEGACY_TAB_PUSH) {
+            originalTabPush ?: error("FixNavigationBarHaze: tabs/g.t not found.")
+        } else null
 
         val mutableClass = mutableClassDefBy(root.definingClass)
 
@@ -477,10 +478,11 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 it.toString() == tab.toString()
             }
 
-        val mutableTabPush =
-            mutableClassDefBy(tabPush.definingClass).methods.first {
-                it.toString() == tabPush.toString()
+        val mutableTabPush = tabPush?.let { target ->
+            mutableClassDefBy(target.definingClass).methods.first {
+                it.toString() == target.toString()
             }
+        }
 
         val implementation = mutableRoot.implementation
             ?: error("Missing root implementation")
@@ -590,7 +592,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         }
 
         require(
-            mutableTabPush.implementation!!.registerCount == 11
+            !ENABLE_LEGACY_TAB_PUSH || mutableTabPush?.implementation?.registerCount == 11
         ) {
             "FixNavigationBarHaze: unexpected tab push register layout."
         }
@@ -1383,7 +1385,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
         // Diagnostic B: native tab navigation requests.
         // REA verified v1 is available at method entry.
 
-        mutableTabPush.addInstructions(
+        mutableTabPush?.addInstructions(
             0,
             """
                 iget-object v1, p0, ${TAB_NAVIGATOR}->h:Lcom/x/navigation/wd;
@@ -1539,7 +1541,7 @@ val fixNavigationBarHazeExperimentalPatch = bytecodePatch(
                 sput-boolean v0, $versionLoggedField
 
                 const-string v0, "$DIAG_TAG"
-                const-string v1, "D3-K1A.11-T5 GLOBAL OVERLAY FIX 3-T2 ACTIVE"
+                const-string v1, "D3-K1A.11-T5 GLOBAL OVERLAY FIX 3-T3A.1 ACTIVE"
 
                 invoke-static {v0, v1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
